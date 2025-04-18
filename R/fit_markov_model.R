@@ -15,22 +15,30 @@ fit_markov_model <- function(data,
   results <- list(
     good_fits = vector(mode = "list", length = length(sample_sizes)),
     bad_fits  = vector(mode = "list", length = length(sample_sizes)),
+    obs_trans = vector("list", length(sample_sizes)),
     test_data = test_data
   )
   
   names(results$good_fits) <- paste0("n_", sample_sizes)
-  names(results$bad_fits) <- paste0("n_", sample_sizes)
+  names(results$bad_fits)  <- paste0("n_", sample_sizes)
+  names(results$obs_trans) <- paste0("n_", sample_sizes)
   
   # Loop over sample sizes
   for(i in seq_along(sample_sizes)) {
     n         <- sample_sizes[i]
     good_fits <- list()
     bad_fits  <- list()
+    obs_trans <- list()
     
     for(reps in 1:n_reps) {
+      
       # Sample subset of training data
       sample_ids  <- sample(unique(train_data$ID), size = n)
       sample_data <- train_data[train_data$ID %in% sample_ids, ]
+      
+      # Calculate an observed transition matrix for this sample
+      transitions <- table(From = sample_data$y_prev, To = sample_data$y)
+      obs_matrix <- round(x = prop.table(transitions, margin = 1), digits = 2)
       
       # A good markov model
       good_fit <- nnet::multinom(
@@ -44,10 +52,12 @@ fit_markov_model <- function(data,
       
       good_fits[[reps]] <- good_fit
       bad_fits[[reps]]  <- bad_fit
+      obs_trans[[reps]] <- obs_matrix
     }
     
     results$good_fits[[i]] <- good_fits
     results$bad_fits[[i]]  <- bad_fits
+    results$obs_trans[[i]] <- obs_trans
   }
   
   return(results)

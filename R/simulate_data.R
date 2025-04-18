@@ -77,28 +77,43 @@ simulate_data <- function(
   n_waves = 3,                      # Number of waves
   y = 1:3,                          # Number of different states (possible transitions)
   transition_matrix = NULL,         # Transition matrix
-  initial_probs = c(0.7, 0.2, 0.1), # Initial probabilities
+  initial_probs = rep(1 / length(y), length(y)), # Initial probabilities
+  state_means = list(               # State dependent means
+    x4 = c(2, 4, 3),                # Poisson Lambda
+    x5 = c(25, 35, 50)),            # Normal Mu
+  covariate_effects = list(         # Covariate effects
+    x2 = c(0, 0.5, 0.1),            # Effect of x2 on state transitions
+    x3 = c(0.5, -0.25, -0.08),              # Effect of x3 on state transitions
+    x4 = c(0, 0.5, 0.6),            # Effect of x4 on state transitions
+    x5 = c(0, 0.4, 0.7)),           # Effect of x5 on state transitions
   seed = NULL) {                    # Seed (for reproducibility)
   
-  # Set seed for reproducibility
+  # Set seed for reproducibility -----------------------------------------------
   if(!is.null(seed)) set.seed(seed)
-  
-  # Generate an initial (stationary) transition matrix (if none provided)
+
+  # Generate an initial (stationary) transition matrix (if none provided) ------
   if(is.null(transition_matrix)) {
-    transition_matrix <- matrix(c(
-      0.8, 0.1, 0.1,
-      0.2, 0.7, 0.1,
-      0.1, 0.2, 0.7
-    ), nrow = length(y), byrow = TRUE)
+    transition_matrix <- matrix(0.1 / (length(y) - 1), nrow = length(y), ncol = length(y), byrow = TRUE)
+    diag(transition_matrix) <- 0.7
   }
   rownames(transition_matrix) <- paste("from", y)
   colnames(transition_matrix) <- paste("to", y)
   
+  # Some validations -----------------------------------------------------------
+  if(length(initial_probs) != length(y)){
+    stop("Length of initial probs must match length of y")
+  }
+  if(dim(transition_matrix)[1] != length(y) & dim(transition_matrix)[2] != length(y)) {
+    stop("Transition matrix must be a square matrix matching length of y")
+  }
+  
+  # Simulating data ------------------------------------------------------------
   # Simulate subject-level characteristics (time-invariant)
   # ID = ID
   # x1 = Gender (poor predictor)
   # x2 = Age (will become time-variariant later) (will be a good predictor)
   # x3 = Education level (will be an ok predictor)
+  
   subject_data <- data.frame(
     ID = 1:n_subjects,
     x1 = sample(0:1, n_subjects, replace = TRUE),
@@ -114,30 +129,19 @@ simulate_data <- function(
     # - Older individuals more likely to be in state 2
     # - Those with higher education more likely to be in state 1
     adjusted_probs <- initial_probs *
-      c(1 + subject_data$x3[id] / 2,  # State 1 boost from education
-        1 + subject_data$x2[id] / 50, # State 2 boost from age
-        1)                            # No effect on state 3
+      c(1 + covariate_effects$x3[1:length(y)] * subject_data$x3[id] / 2 +  # Effect of x3
+        covariate_effects$x2[1:length(y)] * subject_data$x2[id] / 50)      # Effect of x2
     
     # Normalizing
+    adjusted_probs <- pmax(adjusted_probs, 0)
     adjusted_probs <- adjusted_probs / sum(adjusted_probs)
     
+    # Simulating initial state
     current_y <- sample(x = y, size = 1, prob = adjusted_probs)
     
-    # Simulate time-varying covariates (small changes over time) with state 
-    # dependent means
-    
-    # - Higher depression and procrastination in state 2 and 3
-    # - Lower scores in state 1
-    if(current_y == 2) {
-      base_x4 <- rpois(1, lambda = 3)
-      base_x5 <- round(rnorm(1, mean = 35, sd = 8))
-    } else if(current_y == 3) {
-      base_x4 <- rpois(1, lambda = 4)
-      base_x5 <- round(rnorm(1, mean = 40, sd = 8)) 
-    } else{
-      base_x4 <- rpois(1, lambda = 2)
-      base_x5 <- round(rnorm(1, mean = 25, sd = 8)) 
-    }
+    # Simulate time-varying covariates with state-dependent means
+    base_x4 <- rpois(1, lambda = state_means$x4[current_y])
+    base_x5 <- round(rnorm(1, mean = state_means$x5[current_y], sd = 8))
     
     # 🎶 I love them double for loops baby 🎶
     for(wave in 1:n_waves) {
@@ -146,9 +150,9 @@ simulate_data <- function(
         w    = wave,
         y    = current_y,
         x1   = subject_data$x1[id],
-        x2   = subject_data$x2[id] + (wave - 1) * 2, # Age increases
+        x2   = subject_data$x2[id] + (wave - 1) * 2,       # x2 increases
         x3   = subject_data$x3[id],
-        x4   = pmax(0, pmin(8, base_x4 + rpois(1, 0.5))), # bounded between (0 - 8)
+        x4   = pmax(0, pmin(8, base_x4 + rpois(1, 0.5))),  # bounded between (0 - 8)
         x5   = pmax(0, pmin(60, base_x5 + rnorm(1, 0, 2))) # bounded between (0 - 60)
       ))
       
@@ -156,32 +160,22 @@ simulate_data <- function(
       if(wave < n_waves) {
         trans_probs <- transition_matrix[current_y, ]
         
-        # Modify based on covariates
-        # Depression effects:
+        # Modify based on covariates using the predefined effects
         current_x4 <- panel_data$x4[nrow(panel_data)]
-        
-        # - Increased probability of state 2 (moderate effect)
-        # - Increased probability of state 3 (strong effect)
-        trans_probs <- trans_probs * (1 + c(0, current_x4/16, current_x4/8))
-        
-        # Procrastination effects:
         current_x5 <- panel_data$x5[nrow(panel_data)]
         
-        # - Increases probability of state 2 (moderate effect)
-        # - Increases probability of state 3 (strong effect)
-        trans_probs <- trans_probs * (1 + c(0, current_x5/120, current_x5/80))
-        
-        # Education effect (increases probability of state 1)
-        trans_probs <- trans_probs * (1 + c(subject_data$x3[id]/4, 0, 0))
-        
-        # Age effect (increases probability of state 2)
-        trans_probs <- trans_probs * (1 + c(0, subject_data$x2[id]/200, 0))
+        # Apply all covariate effects
+        trans_probs <- trans_probs * 
+          (1 + 
+             covariate_effects$x4 * current_x4 / 8 +           # x4 effect
+             covariate_effects$x5 * current_x5 / 60 +          # x5 effect
+             covariate_effects$x3 * subject_data$x3[id] / 2 +  # x3 effect
+             covariate_effects$x2 * subject_data$x2[id] / 100) # x2 effect
         
         # Ensure probabilities are valid
         trans_probs <- pmax(trans_probs, 0)
         trans_probs <- trans_probs/sum(trans_probs)
         
-        # Simulating y states
         current_y <- sample(y, 1, prob = trans_probs)
         } # End of if statement
     } # End of for(wave in 1:n_waves)
@@ -202,6 +196,8 @@ simulate_data <- function(
     transition_matrix = transition_matrix,
     initial_probs     = initial_probs,
     adjusted_probs    = adjusted_probs,
-    trans_probs       = trans_probs
+    trans_probs       = trans_probs,
+    state_means       = state_means,
+    covariate_effects = covariate_effects
   ))
 }
