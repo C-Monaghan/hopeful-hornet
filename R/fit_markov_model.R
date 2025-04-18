@@ -1,0 +1,54 @@
+fit_markov_model <- function(data,
+                             sample_sizes = c(100, 250, 500, 1000, 5000),
+                             n_reps = 5,
+                             seed = NULL) {
+  
+  if(!is.null(seed)) set.seed(seed)
+  
+  # Create a test set (20% of data)
+  test_id    <- sample(unique(data$ID), size = round(0.2 * length(data$ID)))
+  
+  test_data  <- data[data$ID %in% test_id, ]
+  train_data <- data[!data$ID %in% test_id, ]
+  
+  # Storing results
+  results <- list(
+    good_fits = vector(mode = "list", length = length(sample_sizes)),
+    bad_fits  = vector(mode = "list", length = length(sample_sizes)),
+    test_data = test_data
+  )
+  
+  names(results$good_fits) <- paste0("n_", sample_sizes)
+  names(results$bad_fits) <- paste0("n_", sample_sizes)
+  
+  # Loop over sample sizes
+  for(i in seq_along(sample_sizes)) {
+    n         <- sample_sizes[i]
+    good_fits <- list()
+    bad_fits  <- list()
+    
+    for(reps in 1:n_reps) {
+      # Sample subset of training data
+      sample_ids  <- sample(unique(train_data$ID), size = n)
+      sample_data <- train_data[train_data$ID %in% sample_ids, ]
+      
+      # A good markov model
+      good_fit <- nnet::multinom(
+        y ~ x1 + x2 + x3 + x4 + x5 + y_prev,
+        data = sample_data, trace = FALSE)
+      
+      # A bad markov model
+      bad_fit <- nnet::multinom(
+        y ~ x1 + x3 + y_prev,
+        data = sample_data, trace = FALSE)
+      
+      good_fits[[reps]] <- good_fit
+      bad_fits[[reps]]  <- bad_fit
+    }
+    
+    results$good_fits[[i]] <- good_fits
+    results$bad_fits[[i]]  <- bad_fits
+  }
+  
+  return(results)
+}
