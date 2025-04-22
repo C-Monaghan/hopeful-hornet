@@ -83,7 +83,7 @@ simulate_data <- function(
     x5 = c(25, 35, 50)),            # Normal Mu
   covariate_effects = list(         # Covariate effects
     x2 = c(0, 0.5, 0.1),            # Effect of x2 on state transitions
-    x3 = c(0.5, -0.25, -0.08),              # Effect of x3 on state transitions
+    x3 = c(0.5, -0.25, -0.08),      # Effect of x3 on state transitions
     x4 = c(0, 0.5, 0.6),            # Effect of x4 on state transitions
     x5 = c(0, 0.4, 0.7)),           # Effect of x5 on state transitions
   seed = NULL) {                    # Seed (for reproducibility)

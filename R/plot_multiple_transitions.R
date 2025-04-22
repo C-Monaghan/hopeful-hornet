@@ -1,4 +1,11 @@
-plot_multiple_transitions <- function(transition_list, sample_size, reps = 1:4){
+plot_multiple_transitions <- function(
+    transition_list, 
+    sample_size, 
+    reps = 1:4,
+    obs = TRUE){
+  
+  require(ggplot2)
+  require(ggpubr)
   
   plot_list <- list()
   
@@ -6,10 +13,9 @@ plot_multiple_transitions <- function(transition_list, sample_size, reps = 1:4){
     plot_list[[rep]] <- plot_transitions(
       transition_list = transition_list,
       sample_size = sample_size,
-      rep = rep)
+      rep = rep, 
+      obs = obs)
   }
-  
-  # cowplot::plot_grid(plotlist = plot_list, ncol = 2)
   
   ggpubr::ggarrange(
     plotlist = plot_list, 

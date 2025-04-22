@@ -3,15 +3,16 @@ fit_markov_model <- function(data,
                              n_reps = 5,
                              seed = NULL) {
   
+  # For reproducibility
   if(!is.null(seed)) set.seed(seed)
   
   # Create a test set (20% of data)
-  test_id    <- sample(unique(data$ID), size = round(0.2 * length(data$ID)))
+  test_id    <- sample(unique(data$ID), size = round(0.2 * length(unique(data$ID))))
   
   test_data  <- data[data$ID %in% test_id, ]
   train_data <- data[!data$ID %in% test_id, ]
   
-  # Storing results
+  # For storing end results
   results <- list(
     good_fits = vector(mode = "list", length = length(sample_sizes)),
     bad_fits  = vector(mode = "list", length = length(sample_sizes)),
@@ -19,6 +20,7 @@ fit_markov_model <- function(data,
     test_data = test_data
   )
   
+  # Naming lists for easy understanding
   names(results$good_fits) <- paste0("n_", sample_sizes)
   names(results$bad_fits)  <- paste0("n_", sample_sizes)
   names(results$obs_trans) <- paste0("n_", sample_sizes)
@@ -30,6 +32,7 @@ fit_markov_model <- function(data,
     bad_fits  <- list()
     obs_trans <- list()
     
+    # Loop of number of repetitions
     for(reps in 1:n_reps) {
       
       # Sample subset of training data

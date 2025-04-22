@@ -1,4 +1,8 @@
-plot_transitions <- function(transition_list, sample_size, rep = 1) {
+plot_transitions <- function(
+    transition_list, 
+    sample_size, 
+    rep = 1,
+    obs = TRUE) {
   
   # Required packages ----------------------------------------------------------
   require(reshape2)
@@ -13,6 +17,12 @@ plot_transitions <- function(transition_list, sample_size, rep = 1) {
   }
   if(!sample_size %in% names(transition_list)) {
     stop(paste0("Sample size not found. Available options:"), paste(names(transition_list), collapse = ", "))
+  }
+  
+  if(obs == TRUE) {
+    title = "Observed Transition Matrix"
+  } else {
+    title = "Estimated Transition Matrix"
   }
   
   # Extract observed matrix
@@ -32,7 +42,7 @@ plot_transitions <- function(transition_list, sample_size, rep = 1) {
       palette = "Blue-Red 3", mid = 0.50, alpha = 0.5, 
       limits = c(0, 1), name = "Transition \nProbability") +
     labs(
-      title = "Observed Transition Matrix",
+      title = title,
       subtitle = paste0("Sample size: ", stringr::str_remove(sample_size, "n_"), " | Replicate: ", rep),
       x = "Previous State (t - 1)",
       y = "Current State (t)") +

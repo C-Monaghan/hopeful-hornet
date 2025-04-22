@@ -1,4 +1,4 @@
-rm(list = ls())
+rm(list = ls()) # To annoy Rafael
 
 # Loading simulation functions -------------------------------------------------
 functions <- list.files(path = here::here("R/"), full.names = TRUE)
@@ -9,21 +9,42 @@ sapply(functions, source)
 data <- simulate_data(n_subjects = 2500, seed = 123)$data |>
   add_previous_status()
 
-# Simulate good and bad markov models
+# Simulate good and bad markov models ------------------------------------------
 models <- fit_markov_model(
   data = data, 
   sample_sizes = c(100, 250, 500, 1000), 
-  n_reps = 4, 
+  n_reps = 10, 
   seed = 125)
 
-# Let's look at observed transition matrices
-plot_transitions(transition_list = models$obs_trans, sample_size = "n_100")
-plot_multiple_transitions(transition_list = models$obs_trans, sample_size = "n_1000")
+# Visualizations ---------------------------------------------------------------
+# Observed transition matrices
+plot_transitions(models$obs_trans, sample_size = "n_1000")
+plot_multiple_transitions(models$obs_trans, sample_size = "n_1000")
 
-# Let's look at estimated transition matrices
-estimate_transition_matrices(models, test_data = models$test_data)
+# Estimated transition matrices
+estimate_matrices <- estimate_transition_matrices(models, models$test_data)
+
+# Splitting based on good and bad
+good_predictions <- estimate_matrices$estimated_transitions_good
+bad_predictions  <- estimate_matrices$estimated_transitions_bad
+
+# Plotting
+plot_transitions(good_predictions, sample_size = "n_1000", obs = FALSE)
+plot_transitions(bad_predictions, sample_size = "n_1000", obs = FALSE)
+
+plot_multiple_transitions(good_predictions, sample_size = "n_100", obs = FALSE)
+plot_multiple_transitions(bad_predictions, sample_size = "n_100", obs = FALSE)
 
 
+# Compare matrices
+compare_transition_matrix(
+  models = models, 
+  results = good_predictions, 
+  sample_size = "n_1000",
+  rep = 10, 
+  type = "bad")
+
+# ALTERNATIVE ------------------------------------------------------------------
 # More complex set up with custom parameters for number of: 
 # - States
 # - Waves
@@ -31,7 +52,7 @@ estimate_transition_matrices(models, test_data = models$test_data)
 # - State specific covariate effects (effects on transition probabilities)
 
 data <- simulate_data(
-  n_subjects = 100, 
+  n_subjects = 2500, 
   y = 1:5, 
   n_waves = 10, 
   transition_matrix = NULL,
@@ -46,3 +67,12 @@ data <- simulate_data(
     x5 = c(0, 0.2, 0.2, 0.4, 0.7)),
   seed = 123)$data |>
   add_previous_status()
+
+models <- fit_markov_model(
+  data = data, 
+  sample_sizes = c(100, 250, 500, 1000), 
+  n_reps = 10, 
+  seed = 125)
+
+
+
