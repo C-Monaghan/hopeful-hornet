@@ -35,6 +35,8 @@ fit_markov_model <- function(data,
     # Loop of number of repetitions
     for(reps in 1:n_reps) {
       
+      message("Running model ", reps, " for sample size category ", i)
+      
       # Sample subset of training data
       sample_ids  <- sample(unique(train_data$ID), size = n)
       sample_data <- train_data[train_data$ID %in% sample_ids, ]
