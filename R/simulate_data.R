@@ -1,76 +1,45 @@
-#' Simulate Panel Data with State Transitions and Covariate Effects
-#'
-#' Generates a simulated panel dataset with discrete state transitions where 
-#' covariates differentially affect state probabilities. The function creates 
-#' data where:
-#' - Older individuals are more likely to start in state 2
-#' - Higher education is associated with state 1
-#' - Depression and procrastination scores vary by state and affect 
-#'   transition probabilities
-#'
-#' @param n_subjects Integer. Number of individuals (default: 100).
-#' @param n_waves Integer. Number of time waves/measurements (default: 3).
-#' @param y Numeric vector. Possible states (default: `1:3`).
-#' @param transition_matrix Square matrix. Transition probabilities between states.
-#'   If `NULL` (default), generates a stationary matrix with strong diagonal.
-#' @param initial_probs Numeric vector. Initial state probabilities (default: `c(0.7, 0.2, 0.1)`).
-#' @param seed Integer. Random seed for reproducibility (default: `NULL`).
-#'
-#' @return A list with three components:
-#' \itemize{
-#'   \item `data` - A `data.frame` containing:
-#'     \itemize{
-#'       \item `ID`: Subject identifier
-#'       \item `w`: Wave/time point (factor)
-#'       \item `y`: Current state (factor)
-#'       \item `x1`: Gender (0/1, factor)
-#'       \item `x2`: Age (increases by 2 each wave)
-#'       \item `x3`: Education level (0-2, factor)
-#'       \item `x4`: Depression score (0-8, state-dependent Poisson)
-#'       \item `x5`: Procrastination score (0-60, state-dependent normal)
-#'     }
-#'   \item `transition_matrix` - The transition matrix used (with row/col names)
-#'   \item `initial_probs` - The initial state probabilities
-#' }
-#'
-#' @section Covariate Effects:
-#' \strong{Initial State Probabilities:}
-#' \itemize{
-#'   \item Older individuals (higher x2) more likely to start in state 2
-#'   \item Higher education (higher x3) more likely to start in state 1
-#' }
-#'
-#' \strong{State-Dependent Covariate Means:}
-#' \itemize{
-#'   \item \strong{State 1}: Low depression (λ=2), low procrastination (μ=25)
-#'   \item \strong{State 2}: High depression (λ=4), high procrastination (μ=40)
-#'   \item \strong{State 3}: Moderate depression (λ=3), moderate procrastination (μ=35)
-#' }
-#'
-#' \strong{Transition Probability Effects:}
-#' \itemize{
-#'   \item \strong{Depression (x4)}: Stronger effect on state 3, moderate on state 2
-#'   \item \strong{Procrastination (x5)}: Stronger effect on state 3, moderate on state 2
-#'   \item \strong{Education (x3)}: Increases probability of state 1
-#'   \item \strong{Age (x2)}: Increases probability of state 2
-#' }
-#'
-#' @examples
-#' # Default simulation
-#' dat <- simulate_data(seed = 123)
-#' head(dat$data)
-#'
-#' # Check state-dependent means
-#' aggregate(x4 ~ y, data = dat$data, mean)
-#' aggregate(x5 ~ y, data = dat$data, mean)
-#'
-#' # Custom transition matrix
-#' trans_mat <- matrix(c(0.7, 0.2, 0.1,
-#'                      0.1, 0.8, 0.1,
-#'                      0.05, 0.15, 0.8), nrow = 3)
-#' dat2 <- simulate_data(transition_matrix = trans_mat, n_waves = 5)
-#' 
-#' @export
+# Simulates longitudinal panel data with state transitions and covariate effects.
+# Creates realistic multi-state Markov chain data with time-invariant and time-varying
+# covariates that influence transition probabilities between states.
+#
+# Arguments:
+#   - n_subjects: Number of individuals to simulate
+#   - n_waves: Number of observation waves per individual
+#   - y: Possible states (default 1:3 for 3-state model)
+#   - transition_matrix: Optional custom transition matrix (default generates stationary matrix)
+#   - initial_probs: Starting probabilities for each state
+#   - state_means: List of state-dependent means for time-varying covariates
+#   - covariate_effects: List specifying how covariates influence transitions
+#   - seed: Random seed for reproducibility
+#
+# Returns:
+#   - List containing:
+#     * data: Simulated panel dataset with:
+#       - ID, wave, state (y)
+#       - Time-invariant covariates (x1, x3)
+#       - Time-varying covariates (x2, x4, x5)
+#     * transition_matrix: Used transition probabilities
+#     * initial_probs: Used initial state probabilities
+#     * adjusted_probs: Final adjusted probabilities
+#     * trans_probs: Final transition probabilities
+#     * state_means: State-dependent means used
+#     * covariate_effects: Covariate effects applied
+#
+# Features:
+#   - Realistic aging trajectory simulation (x2 increases over time)
+#   - Bounded time-varying covariates (x4: 0-8, x5: 0-60)
+#   - Multiple covariate effects on transitions:
+#     * x1: Gender (weak effect)
+#     * x2: Age (strong effect)
+#     * x3: Education (moderate effect)
+#     * x4/x5: State-dependent time-varying effects
+#   - Automatic transition matrix generation if none provided
+#   - Comprehensive input validation
+#
+# Notes:
+#   - Uses double for-loop structure for clarity in transition simulation
+#   - Converts categorical variables to factors automatically
+#   - Returns all simulation parameters for reproducibility
 
 simulate_data <- function(
   n_subjects = 100,                 # Number of individuals

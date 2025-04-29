@@ -1,47 +1,30 @@
-#' Add Previous State to Panel Data
-#'
-#' Adds a column containing the previous state (`y_prev`) to longitudinal/panel data.
-#' Useful for transition analysis (e.g., Markov models). Drops the first time point
-#' for each subject since no previous state exists.
-#'
-#' @param data A `data.frame` containing panel data with IDs, time points, and states.
-#' @param id Character. Column name for subject IDs (default: `"ID"`).
-#' @param w Character. Column name for time/wave variable (default: `"w"`).
-#' @param y Character. Column name for state variable (default: `"y"`).
-#'
-#' @return A modified `data.frame` with:
-#' \itemize{
-#'   \item New column `y_prev` (the state at t-1) inserted after `y`
-#'   \item Rows where `y_prev` is `NA` (first observations) removed
-#'   \item If `y` is a factor, `y_prev` inherits the same factor levels
-#'   \item Original ordering preserved within subjects
-#' }
-#'
-#' @details
-#' The function:
-#' 1. Arranges data by `id` and `w` to ensure correct lagging
-#' 2. Groups by `id` and creates `y_prev` using `dplyr::lag()`
-#' 3. Drops initial observations (where `y_prev` is `NA`)
-#' 4. Preserves factor levels if `y` is a factor
-#'
-#' @examples
-#' \dontrun{
-#' library(dplyr)
-#' 
-#' # Simulate data
-#' dat <- simulate_data(n_subjects = 5, n_waves = 3, seed = 123)$data
-#' 
-#' # Add previous states
-#' dat_with_prev <- add_previous_status(dat)
-#' 
-#' # Compare before/after
-#' dat %>% arrange(ID, w) %>% select(ID, w, y)
-#' dat_with_prev %>% arrange(ID, w) %>% select(ID, w, y, y_prev)
-#' }
-#'
-#' @importFrom dplyr arrange group_by mutate ungroup relocate filter
-#' @importFrom rlang sym
-#' @export
+# Adds previous state (t-1) information to longitudinal panel data for transition analysis.
+# Prepares data for Markov modeling by creating lagged state variable and removing
+# initial observations with no previous state.
+#
+# Arguments:
+#   - data: Input dataset containing longitudinal state observations
+#   - id: Column name for subject identifier (default: "ID")
+#   - w: Column name for wave/time variable (default: "w")
+#   - y: Column name for state variable (default: "y")
+#
+# Returns:
+#   - Modified dataset with:
+#     * y_prev column containing previous state (placed after y column)
+#     * First wave observations removed (no previous state available)
+#     * Original factor structure preserved for state variables
+#
+# Process:
+#   1. Arranges data by ID and wave for proper lag calculation
+#   2. Creates y_prev column using lagged y values
+#   3. Maintains factor levels if y is a factor
+#   4. Removes rows with missing y_prev (first wave observations)
+#
+# Notes:
+#   - Essential for transition probability calculations
+#   - Preserves original factor levels when present
+#   - Uses tidyverse syntax for consistency with pipeline workflows
+#   - Handles both numeric and factor state variables appropriately
 
 add_previous_status <- function(data, id = "ID", w = "w", y = "y") {
   
