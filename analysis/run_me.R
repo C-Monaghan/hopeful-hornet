@@ -1,5 +1,8 @@
 rm(list = ls()) # To annoy Rafael
 
+library(dplyr)
+library(ggplot2)
+
 # Loading simulation functions -------------------------------------------------
 functions <- list.files(path = here::here("R/"), full.names = TRUE)
 
@@ -18,8 +21,8 @@ models <- fit_markov_model(
 
 # Visualizations ---------------------------------------------------------------
 # Observed transition matrices
-plot_transitions(models$obs_trans, sample_size = "n_1000")
-plot_multiple_transitions(models$obs_trans, sample_size = "n_1000")
+plot_transitions(models$obs_trans, sample_size = "n_1000", rep = 1)
+plot_multiple_transitions(models$obs_trans, sample_size = "n_1000", reps = 1:6)
 
 # Estimated transition matrices
 estimate_matrices <- estimate_transition_matrices(models, models$test_data)
@@ -35,7 +38,6 @@ plot_transitions(bad_predictions, sample_size = "n_1000", rep = 1, obs = FALSE)
 plot_multiple_transitions(good_predictions, sample_size = "n_100", obs = FALSE)
 plot_multiple_transitions(bad_predictions, sample_size = "n_100", obs = FALSE)
 
-
 # Compare matrices
 compare_transition_matrix(
   models = models, 
@@ -47,25 +49,15 @@ compare_transition_matrix(
 # Calculating distance based metrics
 distances <- calculate_matrix_distances(
   results = estimate_matrices, 
-  sample_size = c("n_100", "n_250"),
-  rep = 1:10)
+  sample_size = c("n_100", "n_250", "n_500", "n_1000"),
+  rep = 1:100)
 
-distances |>
-  ggplot(aes(x = sample_size, y = value, fill = metric)) +
-  geom_col(colour = "black") +
-  # geom_text(aes(label = mean_distance), vjust = -0.5) +
-  ggokabeito::scale_fill_okabe_ito() +
-  facet_grid(metric ~ model_type) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "none"
-  )
-
-
+# Plotting ---------------------------------------------------------------------
 distances |>
   group_by(sample_size, model_type, metric) |>
-  dplyr::summarise(mean_distance = mean(value)) |> 
-  dplyr::mutate(mean_distance = round(mean_distance, digits = 2)) |>
+  summarise(mean_distance = mean(value)) |> 
+  mutate(mean_distance = round(mean_distance, digits = 2),
+         sample_size = stringr::str_replace(sample_size, "_", " = ")) |>
   ggplot(aes(x = metric, y = mean_distance, fill = metric)) +
   geom_col(colour = "black") +
   geom_text(aes(label = mean_distance, vjust = -0.5)) +
@@ -85,17 +77,6 @@ distances |>
     axis.text.x = element_text(angle = 45, hjust = 1),
     legend.position = "none"
   )
-
-distances |>
-  dplyr::filter(repitition == 1) |>
-  ggplot(aes(x = metric, y = value, fill = metric)) +
-  geom_col(colour = "black") +
-  facet_grid(model_type ~ sample_size) +
-  ggeasy::easy_remove_legend()
-
-distances
-  
-  
 
 # ALTERNATIVE ------------------------------------------------------------------
 # More complex set up with custom parameters for number of: 
@@ -124,7 +105,7 @@ data <- simulate_data(
 models <- fit_markov_model(
   data = data, 
   sample_sizes = c(100, 250, 500, 1000), 
-  n_reps = 10, 
+  n_reps = 100, 
   seed = 125)
 
 
