@@ -10,6 +10,8 @@
 #     * x1-x5: Predictor variables
 #   - sample_sizes: Vector of sample sizes to evaluate model performance
 #   - n_reps: Number of repetitions per sample size
+#   - parallel: Logical indicating if parallel processing should be used
+#   - n_cores: Number of cores to use for parallel processing (default is all but one)
 #   - seed: Optional random seed for reproducibility
 #
 # Returns:
@@ -36,6 +38,8 @@
 fit_markov_model <- function(data,
                              sample_sizes = c(100, 250, 500, 1000, 5000),
                              n_reps = 5,
+                             parallel = FALSE,
+                             n_cores = parallel::detectCores() - 1,
                              seed = NULL) {
   
   # For reproducibility
@@ -60,6 +64,48 @@ fit_markov_model <- function(data,
   names(results$bad_fits)  <- paste0("n_", sample_sizes)
   names(results$obs_trans) <- paste0("n_", sample_sizes)
   
+  # Set up parallel processing if requested
+  if(parallel == TRUE) {
+    require(foreach)
+    
+    cl <- parallel::makeCluster(n_cores)
+    doParallel::registerDoParallel(cl)
+    on.exit(parallel::stopCluster(cl))
+  }
+  
+  if(parallel == TRUE) {
+    # Loop over sample sizes
+    for(i in seq_along(sample_sizes)) {
+      n <- sample_sizes[i]
+      
+      # Process repetitions in parallel
+      rep_results <- foreach(reps = 1:n_reps, .packages = "nnet") %dopar% {
+        # Sample subset of training data
+        sample_ids <- sample(unique(train_data$ID), size = n)
+        sample_data <- train_data[train_data$ID %in% sample_ids, ]
+        
+        # Calculate observed transition matrix
+        transitions <- table(From = sample_data$y_prev, To = sample_data$y)
+        obs_matrix <- round(prop.table(transitions, margin = 1), 2)
+        
+        # Fit models
+        good_fit <- nnet::multinom(
+          y ~ x1 + x2 + x3 + x4 + x5 + y_prev,
+          data = sample_data, trace = FALSE)
+        
+        bad_fit <- nnet::multinom(
+          y ~ x1 + x3 + y_prev,
+          data = sample_data, trace = FALSE)
+        
+        list(good_fit = good_fit, bad_fit = bad_fit, obs_matrix = obs_matrix)
+      }
+      
+      # Extract results from parallel processing
+      results$good_fits[[i]] <- lapply(rep_results, function(x) x$good_fit)
+      results$bad_fits[[i]] <- lapply(rep_results, function(x) x$bad_fit)
+      results$obs_trans[[i]] <- lapply(rep_results, function(x) x$obs_matrix)
+    }
+  } else {
   # Loop over sample sizes
   for(i in seq_along(sample_sizes)) {
     n         <- sample_sizes[i]
@@ -98,6 +144,7 @@ fit_markov_model <- function(data,
     results$good_fits[[i]] <- good_fits
     results$bad_fits[[i]]  <- bad_fits
     results$obs_trans[[i]] <- obs_trans
+  }
   }
   
   return(results)
