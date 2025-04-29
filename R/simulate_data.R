@@ -145,6 +145,10 @@ simulate_data <- function(
     
     # 🎶 I love them double for loops baby 🎶
     for(wave in 1:n_waves) {
+      
+      # Outputting message
+      message("Generating data for person ", id, " in wave ", wave)
+      
       panel_data <- rbind(panel_data, data.frame(
         ID   = id,
         w    = wave,

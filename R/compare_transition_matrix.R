@@ -1,3 +1,33 @@
+# Compares observed and estimated transition matrices through side-by-side heatmap visualizations.
+# Generates either individual or multiple comparison plots for specified sample sizes and 
+# repetitions, with options for well-specified ("good") or misspecified ("bad") model types.
+#
+# Arguments:
+#   - models: List containing observed transition matrices ($obs_trans)
+#   - results: List containing estimated transition matrices (either good or bad models)
+#   - sample_size: Specific sample size(s) to compare (NULL compares all available)
+#   - rep: Specific repetition(s) to compare (NULL compares all available)
+#   - type: Model type to compare ("good" for well-specified, "bad" for misspecified)
+#
+# Returns:
+#   - When sample_size and rep are specified: Single ggplot object (invisibly)
+#   - When multiple comparisons: List of ggplot objects or grid arrangement
+#   - Displays warnings when too many plots for automatic arrangement
+#
+# Features:
+#   - Validates input type specification
+#   - Automatically detects available sample sizes/repetitions
+#   - Creates standardized comparison heatmaps with:
+#     * Consistent color scales (Blue-Red diverging)
+#     * Probability value labels
+#     * Informative titles and axis labels
+#     * Faceted by matrix type (Observed vs Estimated)
+#
+# Behavior:
+#   1. For single comparisons: Prints and returns plot directly
+#   2. For multiple comparisons: Returns list or grid arrangement
+#   3. Warns when returning list due to excessive plots
+
 compare_transition_matrix <- function(
     models, 
     results,

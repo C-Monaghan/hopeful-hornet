@@ -1,3 +1,38 @@
+# Fits and compares well-specified and misspecified Markov models across multiple sample sizes.
+# Performs repeated model fitting with different training samples to assess model performance
+# and stability. Creates a holdout test set for external validation.
+#
+# Arguments:
+#   - data: Dataset containing transition data with:
+#     * ID: Subject identifier
+#     * y_prev: Previous state (factor)
+#     * y: Current state (factor)
+#     * x1-x5: Predictor variables
+#   - sample_sizes: Vector of sample sizes to evaluate model performance
+#   - n_reps: Number of repetitions per sample size
+#   - seed: Optional random seed for reproducibility
+#
+# Returns:
+#   - List containing three components:
+#     1. good_fits: Well-specified models (using all predictors)
+#     2. bad_fits: Misspecified models (using subset of predictors)
+#     3. obs_trans: Observed transition matrices for each sample
+#     4. test_data: Holdout dataset (20% of observations)
+#
+# Process:
+#   1. Splits data into training (80%) and test (20%) sets
+#   2. For each sample size:
+#     a) Samples n individuals from training set
+#     b) Calculates observed transition matrix
+#     c) Fits both model specifications
+#   3. Repeats process n_reps times per sample size
+#
+# Notes:
+#   - Uses multinomial logistic regression via nnet::multinom
+#   - Well-specified model includes all predictors (x1-x5 + y_prev)
+#   - Misspecified model uses reduced predictor set (x1 + x3 + y_prev)
+#   - Results organized by sample size for easy comparison
+
 fit_markov_model <- function(data,
                              sample_sizes = c(100, 250, 500, 1000, 5000),
                              n_reps = 5,

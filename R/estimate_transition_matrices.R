@@ -25,6 +25,8 @@ estimate_transition_matrices <- function(model_results, test_data = NULL) {
     test_data <- model_results$test_data
   }
   
+  message("Generating predictions... please wait")
+  
   # Initialize storage
   model_results$estimated_transitions_good <- lapply(model_results$good_fits, function(x) {
     lapply(x, create_estimated_transition_matrix, data = test_data)

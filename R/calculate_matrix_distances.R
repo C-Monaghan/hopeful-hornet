@@ -1,3 +1,35 @@
+# Computes multiple distance metrics between observed and estimated transition matrices.
+# Compares both well-specified and misspecified models across specified sample sizes
+# and repetitions. Handles input validation and provides informative error messages.
+#
+# Arguments:
+#   - results: List containing three components:
+#     * obs_trans: Observed transition matrices
+#     * estimated_transitions_good: Well-specified model estimates  
+#     * estimated_transitions_bad: Misspecified model estimates
+#   - sample_size: Specific sample size(s) to analyze (NULL processes all available)
+#   - rep: Specific repetition(s) to analyze (NULL processes all available)
+#   - epsilon: Small constant to avoid division by zero in KL divergence
+#   - type: Placeholder for future visualization type specification
+#
+# Returns:
+#   - Tidy dataframe with seven distance metrics for each model type, including:
+#     * Frobenius, Manhattan, and Maximum distances
+#     * Mean absolute difference and RMSE  
+#     * Correlation distance and KL divergence
+#     * Properly formatted factor variables for visualization
+#
+# Validation Steps:
+#   1. Checks for required input components
+#   2. Identifies available sample sizes
+#   3. Validates requested sample sizes
+#   4. Validates requested repetitions
+#
+# Error Handling:
+#   - Provides specific warnings for missing data
+#   - Skips problematic cases while continuing processing
+#   - Returns meaningful error if no metrics calculated
+# 
 calculate_matrix_distances <- function(results, sample_size = NULL, 
                                        rep = NULL, epsilon = 1e-10, type = "bar") {
   
