@@ -93,7 +93,14 @@ simulate_data <- function(
   # Simulate time-varying outcomes
   panel_data <- data.frame()
   
+  # Progress bar
+  pb <- utils::txtProgressBar(min = 0, max = n_subjects, style = 3)
+  
   for(id in 1:n_subjects) {
+    
+    # Start progress
+    utils::setTxtProgressBar(pb, id)
+    
     # Initialize state with some covariate effects
     # - Older individuals more likely to be in state 2
     # - Those with higher education more likely to be in state 1
@@ -116,7 +123,7 @@ simulate_data <- function(
     for(wave in 1:n_waves) {
       
       # Outputting message
-      message("Generating data for person ", id, " in wave ", wave)
+      # message("Generating data for person ", id, " in wave ", wave)
       
       panel_data <- rbind(panel_data, data.frame(
         ID   = id,
@@ -153,6 +160,9 @@ simulate_data <- function(
         } # End of if statement
     } # End of for(wave in 1:n_waves)
   } # End of for(id in 1:n_subjects)
+  
+  # End progress
+  close(pb)
   
   # Converting certain rows to factors
   panel_data$y  <- factor(panel_data$y)
