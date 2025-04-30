@@ -42,16 +42,19 @@ fit_markov_model <- function(data,
                              n_cores = parallel::detectCores() - 1,
                              seed = NULL) {
   
-  # For reproducibility
+  # For reproducibility --------------------------------------------------------
   if(!is.null(seed)) set.seed(seed)
   
-  # Create a test set (20% of data)
-  test_id    <- sample(unique(data$ID), size = round(0.2 * length(unique(data$ID))))
+  # Create a test set (20% of data) --------------------------------------------
+  ids        <- unique(data$ID)
+  test_id    <- sample(ids, size = round(0.2 * length(ids)))
   
   test_data  <- data[data$ID %in% test_id, ]
   train_data <- data[!data$ID %in% test_id, ]
   
-  # For storing end results
+  unique_train_ids <- unique(train_data$ID)
+  
+  # For storing end results ----------------------------------------------------
   results <- list(
     good_fits = vector(mode = "list", length = length(sample_sizes)),
     bad_fits  = vector(mode = "list", length = length(sample_sizes)),
@@ -59,93 +62,202 @@ fit_markov_model <- function(data,
     test_data = test_data
   )
   
-  # Naming lists for easy understanding
+  # Naming lists for easy understanding ----------------------------------------
   names(results$good_fits) <- paste0("n_", sample_sizes)
   names(results$bad_fits)  <- paste0("n_", sample_sizes)
   names(results$obs_trans) <- paste0("n_", sample_sizes)
   
-  # Set up parallel processing if requested
-  if(parallel == TRUE) {
-    require(foreach)
-    
-    cl <- parallel::makeCluster(n_cores)
-    doParallel::registerDoParallel(cl)
-    on.exit(parallel::stopCluster(cl))
+  # Setting up a worker for both parallel and sequential processing ------------
+  fit_worker <- function(n) {
+    replicate(n_reps, {
+      sample_ids <- sample(unique_train_ids, size = n)
+      sample_data <- train_data[train_data$ID %in% sample_ids, ]
+      
+      transitions <- table(From = sample_data$y_prev, To = sample_data$y)
+      obs_matrix <- round(prop.table(transitions, margin = 1), 2)
+      
+      list(
+        good_fit = nnet::multinom(y ~ x1 + x2 + x3 + x4 + x5 + y_prev, data = sample_data, trace = FALSE),
+        bad_fit = nnet::multinom(y ~ x1 + x3 + y_prev, data = sample_data, trace = FALSE),
+        obs_matrix = obs_matrix
+      )
+    }, simplify = FALSE)
   }
   
-  if(parallel == TRUE) {
-    # Loop over sample sizes
+  # Parallel Execution
+  if(parallel) {
+    require(foreach)
+    require(doSNOW)
+    
+    cl <- parallel::makeCluster(n_cores)
+    doSNOW::registerDoSNOW(cl)
+    
+    # Progress bar
+    pb      <- utils::txtProgressBar(max = length(sample_sizes) * n_reps, style = 3)
+    counter <- 0
+    opts    <- list(progress = function(n) {
+      counter <<- counter + 1
+      utils::setTxtProgressBar(pb, counter)
+    })
+    
+    parallel::clusterExport(cl, varlist = c("train_data", "unique_train_ids"), envir = environment())
+    
     for(i in seq_along(sample_sizes)) {
       n <- sample_sizes[i]
       
-      # Process repetitions in parallel
-      rep_results <- foreach(reps = 1:n_reps, .packages = "nnet") %dopar% {
-        # Sample subset of training data
-        sample_ids <- sample(unique(train_data$ID), size = n)
-        sample_data <- train_data[train_data$ID %in% sample_ids, ]
-        
-        # Calculate observed transition matrix
-        transitions <- table(From = sample_data$y_prev, To = sample_data$y)
-        obs_matrix <- round(prop.table(transitions, margin = 1), 2)
-        
-        # Fit models
-        good_fit <- nnet::multinom(
-          y ~ x1 + x2 + x3 + x4 + x5 + y_prev,
-          data = sample_data, trace = FALSE)
-        
-        bad_fit <- nnet::multinom(
-          y ~ x1 + x3 + y_prev,
-          data = sample_data, trace = FALSE)
-        
-        list(good_fit = good_fit, bad_fit = bad_fit, obs_matrix = obs_matrix)
-      }
+      rep_results <- foreach::foreach(
+        reps = 1:n_reps, .packages = "nnet", .options.snow = opts) %dopar% {
+          
+          sample_ids <- sample(unique_train_ids, size = n)
+          sample_data <- train_data[train_data$ID %in% sample_ids, ]
+          
+          transitions <- table(From = sample_data$y_prev, To = sample_data$y)
+          obs_matrix <- round(prop.table(transitions, margin = 1), 2)
+          
+          list(
+            good_fit = nnet::multinom(y ~ x1 + x2 + x3 + x4 + x5 + y_prev, data = sample_data, trace = FALSE),
+            bad_fit = nnet::multinom(y ~ x1 + x3 + y_prev, data = sample_data, trace = FALSE),
+            obs_matrix = obs_matrix
+          )
+        } # End of %dopar%
       
-      # Extract results from parallel processing
-      results$good_fits[[i]] <- lapply(rep_results, function(x) x$good_fit)
-      results$bad_fits[[i]] <- lapply(rep_results, function(x) x$bad_fit)
-      results$obs_trans[[i]] <- lapply(rep_results, function(x) x$obs_matrix)
-    }
+      results$good_fits[[i]] <- lapply(rep_results, `[[`, "good_fit")
+      results$bad_fits[[i]] <- lapply(rep_results, `[[`, "bad_fit")
+      results$obs_trans[[i]] <- lapply(rep_results, `[[`, "obs_matrix")
+  } # End of for(i in seq_along(sample_sizes))
+    
+    parallel::stopCluster(cl)
+    
   } else {
-  # Loop over sample sizes
-  for(i in seq_along(sample_sizes)) {
-    n         <- sample_sizes[i]
-    good_fits <- list()
-    bad_fits  <- list()
-    obs_trans <- list()
-    
-    # Loop of number of repetitions
-    for(reps in 1:n_reps) {
-      
-      message("Running model ", reps, " for sample size category ", i)
-      
-      # Sample subset of training data
-      sample_ids  <- sample(unique(train_data$ID), size = n)
-      sample_data <- train_data[train_data$ID %in% sample_ids, ]
-      
-      # Calculate an observed transition matrix for this sample
-      transitions <- table(From = sample_data$y_prev, To = sample_data$y)
-      obs_matrix <- round(x = prop.table(transitions, margin = 1), digits = 2)
-      
-      # A good markov model
-      good_fit <- nnet::multinom(
-        y ~ x1 + x2 + x3 + x4 + x5 + y_prev,
-        data = sample_data, trace = FALSE)
-      
-      # A bad markov model
-      bad_fit <- nnet::multinom(
-        y ~ x1 + x3 + y_prev,
-        data = sample_data, trace = FALSE)
-      
-      good_fits[[reps]] <- good_fit
-      bad_fits[[reps]]  <- bad_fit
-      obs_trans[[reps]] <- obs_matrix
-    }
-    
-    results$good_fits[[i]] <- good_fits
-    results$bad_fits[[i]]  <- bad_fits
-    results$obs_trans[[i]] <- obs_trans
-  }
+    # Serial processing
+    for (i in seq_along(sample_sizes)) {
+      message("Running sample size ", sample_sizes[i], " (", i, "/", length(sample_sizes), ")")
+      rep_results <- fit_worker(sample_sizes[i])
+      results$good_fits[[i]] <- lapply(rep_results, `[[`, "good_fit")
+      results$bad_fits[[i]] <- lapply(rep_results, `[[`, "bad_fit")
+      results$obs_trans[[i]] <- lapply(rep_results, `[[`, "obs_matrix")
+    } # End of for (i in seq_along(sample_sizes))
   }
   
   return(results)
 }
+
+# # Set up parallel processing if requested
+# if(parallel) {
+#   # Required packages
+#   require(foreach)
+#   require(doSNOW)
+#   require(progress)
+#   require(parallel)
+#   
+#   # Unique IDs
+#   unique_train_ids <- unique(train_data$ID)
+#   
+#   # Setting up back-end
+#   cl <- parallel::makeCluster(n_cores)
+#   doSNOW::registerDoSNOW(cl)
+#   
+#   # Setting up progress bar
+#   # pb <- progress::progress_bar$new(
+#   # format = "Fitting models [:bar] :percent | ETA: :eta",
+#   # total = length(sample_sizes) * n_reps,
+#   # clear = FALSE)
+#   
+#   # opts <- list(progress = function(n) pb$stick)
+#   
+#   pb <- utils::txtProgressBar(max = length(sample_sizes) * n_reps, style = 3)
+#   progress <- function(n) utils::setTxtProgressBar(pb, n)
+#   opts <- list(progress = progress)
+#   
+#   parallel::clusterExport(
+#     cl, c("unique_train_ids", "train_data"),
+#     envir = environment())
+# }
+# 
+# # Run with parallel processing
+# if(parallel == TRUE) {
+#   # Loop over sample sizes
+#   for(i in seq_along(sample_sizes)) {
+#     n <- sample_sizes[i]
+#     
+#     # # Process models in parallel with progress
+#     rep_results <- foreach::foreach(
+#       reps = 1:n_reps, 
+#       .packages = c("nnet", "progress"),
+#       .options.snow = if(parallel) opts else NULL,
+#       .combine = "list",
+#       .multicombine = TRUE
+#     ) %dopar% {
+#       # Sample subset of training data
+#       sample_ids <- sample(unique_train_ids, size = n)
+#       sample_data <- train_data[train_data$ID %in% sample_ids, ]
+#       
+#       # Calculate observed transition matrix
+#       transitions <- table(From = sample_data$y_prev, To = sample_data$y)
+#       obs_matrix <- round(prop.table(transitions, margin = 1), 2)
+#       
+#       # Fit models
+#       good_fit <- nnet::multinom(
+#         y ~ x1 + x2 + x3 + x4 + x5 + y_prev,
+#         data = sample_data, trace = FALSE)
+#       
+#       bad_fit <- nnet::multinom(
+#         y ~ x1 + x3 + y_prev,
+#         data = sample_data, trace = FALSE)
+#       
+#       list(good_fit = good_fit, bad_fit = bad_fit, obs_matrix = obs_matrix)
+#     }
+#     
+#     # Extract results from parallel processing
+#     # results$good_fits[[i]] <- lapply(rep_results, function(x) x$good_fit)
+#     # results$bad_fits[[i]] <- lapply(rep_results, function(x) x$bad_fit)
+#     # results$obs_trans[[i]] <- lapply(rep_results, function(x) x$obs_matrix)
+#     
+#     results$good_fits[[i]] <- lapply(rep_results, `[[`, "good_fit")
+#     results$bad_fits[[i]] <- lapply(rep_results, `[[`, "bad_fit")
+#     results$obs_trans[[i]] <- lapply(rep_results, `[[`, "obs_matrix")
+#   }
+#   
+#   # Clean up parallel processing background
+#   parallel::stopCluster(cl)
+# } else {
+#   # Loop over sample sizes
+#   for(i in seq_along(sample_sizes)) {
+#     n         <- sample_sizes[i]
+#     good_fits <- list()
+#     bad_fits  <- list()
+#     obs_trans <- list()
+#     
+#     # Loop of number of repetitions
+#     for(reps in 1:n_reps) {
+#       
+#       message("Running model ", reps, " for sample size category ", i)
+#       
+#       # Sample subset of training data
+#       sample_ids  <- sample(unique(train_data$ID), size = n)
+#       sample_data <- train_data[train_data$ID %in% sample_ids, ]
+#       
+#       # Calculate an observed transition matrix for this sample
+#       transitions <- table(From = sample_data$y_prev, To = sample_data$y)
+#       obs_matrix <- round(x = prop.table(transitions, margin = 1), digits = 2)
+#       
+#       # A good markov model
+#       good_fit <- nnet::multinom(
+#         y ~ x1 + x2 + x3 + x4 + x5 + y_prev,
+#         data = sample_data, trace = FALSE)
+#       
+#       # A bad markov model
+#       bad_fit <- nnet::multinom(
+#         y ~ x1 + x3 + y_prev,
+#         data = sample_data, trace = FALSE)
+#       
+#       good_fits[[reps]] <- good_fit
+#       bad_fits[[reps]]  <- bad_fit
+#       obs_trans[[reps]] <- obs_matrix
+#     }
+#     
+#     results$good_fits[[i]] <- good_fits
+#     results$bad_fits[[i]]  <- bad_fits
+#     results$obs_trans[[i]] <- obs_trans
+#   }
+# }
