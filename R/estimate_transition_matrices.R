@@ -28,12 +28,12 @@ estimate_transition_matrices <- function(model_results, test_data = NULL) {
   message("Generating predictions... please wait")
   
   # Initialize storage
-  model_results$estimated_transitions_good <- lapply(model_results$good_fits, function(x) {
-    lapply(x, create_estimated_transition_matrix, data = test_data)
+  model_results$estimated_transitions_good <- pbapply::pblapply(model_results$good_fits, function(fits) {
+    pbapply::pblapply(fits, create_estimated_transition_matrix, data = test_data)
   })
   
-  model_results$estimated_transitions_bad <- lapply(model_results$bad_fits, function(x) {
-    lapply(x, create_estimated_transition_matrix, data = test_data)
+  model_results$estimated_transitions_bad <- pbapply::pblapply(model_results$bad_fits, function(fits) {
+    pbapply::pblapply(fits, create_estimated_transition_matrix, data = test_data)
   })
   
   return(model_results)
