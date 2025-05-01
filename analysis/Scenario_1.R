@@ -12,7 +12,7 @@ functions <- list.files(path = here::here("R/"), full.names = TRUE)
 sapply(functions, source)
 
 # Simulating data with default parameters --------------------------------------
-simulation <- simulate_data(n_subjects = 10000, seed = 123)
+simulation <- simulate_data(n_subjects = 2500, seed = 123)
 
 data <- simulation$data |>
   add_previous_status()

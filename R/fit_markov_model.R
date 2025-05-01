@@ -88,6 +88,7 @@ fit_markov_model <- function(data,
   if(parallel) {
     require(foreach)
     require(doSNOW)
+    require(doRNG)
     
     cl <- parallel::makeCluster(n_cores)
     doSNOW::registerDoSNOW(cl)
@@ -102,11 +103,14 @@ fit_markov_model <- function(data,
     
     parallel::clusterExport(cl, varlist = c("train_data", "unique_train_ids"), envir = environment())
     
+    # Setting seed for parallel processing
+    if(!is.null(seed)) doRNG::registerDoRNG(seed)
+      
     for(i in seq_along(sample_sizes)) {
       n <- sample_sizes[i]
       
       rep_results <- foreach::foreach(
-        reps = 1:n_reps, .packages = "nnet", .options.snow = opts) %dopar% {
+        reps = 1:n_reps, .packages = "nnet", .options.snow = opts) %dorng% {
           
           sample_ids <- sample(unique_train_ids, size = n)
           sample_data <- train_data[train_data$ID %in% sample_ids, ]
