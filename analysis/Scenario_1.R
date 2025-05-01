@@ -12,7 +12,7 @@ functions <- list.files(path = here::here("R/"), full.names = TRUE)
 sapply(functions, source)
 
 # Simulating data with default parameters --------------------------------------
-simulation <- simulate_data(n_subjects = 2500, seed = 123)
+simulation <- simulate_data(n_subjects = 10000, seed = 123)
 
 data <- simulation$data |>
   add_previous_status()
@@ -22,7 +22,7 @@ models <- fit_markov_model(
   data = data, 
   sample_sizes = c(100, 250, 500, 1000), 
   n_reps = 1000,
-  parallel = FALSE,
+  parallel = TRUE,
   seed = 125)
 
 # Visualizations ---------------------------------------------------------------
