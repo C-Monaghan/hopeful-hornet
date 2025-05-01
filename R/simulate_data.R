@@ -90,8 +90,13 @@ simulate_data <- function(
     x3 = sample(0:2, n_subjects, replace = TRUE, prob = c(0.3, 0.5, 0.2))
   )
   
+  # Preallocating results (for better optimization)
+  total_rows <- n_subjects * n_waves
+  panel_list <- vector("list", total_rows)
+  row_index  <- 1
+  
   # Simulate time-varying outcomes
-  panel_data <- data.frame()
+  # panel_data <- data.frame()
   
   # Progress bar
   pb <- utils::txtProgressBar(min = 0, max = n_subjects, style = 3)
@@ -101,19 +106,18 @@ simulate_data <- function(
     # Start progress
     utils::setTxtProgressBar(pb, id)
     
+    subj <- subject_data[id, ]
+    
     # Initialize state with some covariate effects
     # - Older individuals more likely to be in state 2
     # - Those with higher education more likely to be in state 1
-    adjusted_probs <- initial_probs *
-      c(1 + covariate_effects$x3[1:length(y)] * subject_data$x3[id] / 2 +  # Effect of x3
-        covariate_effects$x2[1:length(y)] * subject_data$x2[id] / 50)      # Effect of x2
-    
-    # Normalizing
-    adjusted_probs <- pmax(adjusted_probs, 0)
-    adjusted_probs <- adjusted_probs / sum(adjusted_probs)
+    adj_probs <- initial_probs *
+      (1 + covariate_effects$x3 * subj$x3 / 2 + covariate_effects$x2 * subj$x2 / 50)
+    adj_probs <- pmax(adj_probs, 0)
+    adj_probs <- adj_probs / sum(adj_probs)
     
     # Simulating initial state
-    current_y <- sample(x = y, size = 1, prob = adjusted_probs)
+    current_y <- sample(x = y, size = 1, prob = adj_probs)
     
     # Simulate time-varying covariates with state-dependent means
     base_x4 <- rpois(1, lambda = state_means$x4[current_y])
@@ -121,36 +125,32 @@ simulate_data <- function(
     
     # 🎶 I love them double for loops baby 🎶
     for(wave in 1:n_waves) {
+      # Variables vary across time
+      age <- subj$x2 + (wave - 1) * 2
+      x4  <- pmin(8, pmax(0, base_x4 + rpois(1, 0.5)))
+      x5  <- pmin(60, pmax(0, base_x5 + rnorm(1, 0, 2)))
       
-      # Outputting message
-      # message("Generating data for person ", id, " in wave ", wave)
+      panel_list[[row_index]] <- list(
+        ID = id, 
+        w = wave, 
+        y = current_y,
+        x1 = subj$x1, 
+        x2 = age, 
+        x3 = subj$x3,
+        x4 = x4, 
+        x5 = round(x5)
+      )
       
-      panel_data <- rbind(panel_data, data.frame(
-        ID   = id,
-        w    = wave,
-        y    = current_y,
-        x1   = subject_data$x1[id],
-        x2   = subject_data$x2[id] + (wave - 1) * 2,       # x2 increases
-        x3   = subject_data$x3[id],
-        x4   = pmax(0, pmin(8, base_x4 + rpois(1, 0.5))),  # bounded between (0 - 8)
-        x5   = pmax(0, pmin(60, base_x5 + rnorm(1, 0, 2))) # bounded between (0 - 60)
-      ))
+      # Do next row
+      row_index <- row_index + 1
       
       # Simulate transition to next state with covariate effects
       if(wave < n_waves) {
-        trans_probs <- transition_matrix[current_y, ]
-        
-        # Modify based on covariates using the predefined effects
-        current_x4 <- panel_data$x4[nrow(panel_data)]
-        current_x5 <- panel_data$x5[nrow(panel_data)]
-        
-        # Apply all covariate effects
-        trans_probs <- trans_probs * 
-          (1 + 
-             covariate_effects$x4 * current_x4 / 8 +           # x4 effect
-             covariate_effects$x5 * current_x5 / 60 +          # x5 effect
-             covariate_effects$x3 * subject_data$x3[id] / 2 +  # x3 effect
-             covariate_effects$x2 * subject_data$x2[id] / 100) # x2 effect
+        trans_probs <- transition_matrix[current_y, ] *
+          (1 + covariate_effects$x4 * x4 / 8 +
+             covariate_effects$x5 * x5 / 60 +
+             covariate_effects$x3 * subj$x3 / 2 +
+             covariate_effects$x2 * subj$x2 / 100)
         
         # Ensure probabilities are valid
         trans_probs <- pmax(trans_probs, 0)
@@ -163,6 +163,11 @@ simulate_data <- function(
   
   # End progress
   close(pb)
+  
+  # Turn into one data set
+  panel_data <- data.table::rbindlist(panel_list)
+  panel_data <- as.data.frame(panel_data)
+  # panel_data <- do.call(rbind, lapply(panel_list, as.data.frame))
   
   # Converting certain rows to factors
   panel_data$y  <- factor(panel_data$y)
@@ -178,7 +183,7 @@ simulate_data <- function(
     data              = panel_data,
     transition_matrix = transition_matrix,
     initial_probs     = initial_probs,
-    adjusted_probs    = adjusted_probs,
+    adjusted_probs    = adj_probs,
     trans_probs       = trans_probs,
     state_means       = state_means,
     covariate_effects = covariate_effects
