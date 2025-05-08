@@ -1,60 +1,43 @@
-# Simulates longitudinal panel data with state transitions and covariate effects.
-# Creates realistic multi-state Markov chain data with time-invariant and time-varying
-# covariates that influence transition probabilities between states.
-#
-# Arguments:
-#   - n_subjects: Number of individuals to simulate
-#   - n_waves: Number of observation waves per individual
-#   - y: Possible states (default 1:3 for 3-state model)
-#   - transition_matrix: Optional custom transition matrix (default generates stationary matrix)
-#   - initial_probs: Starting probabilities for each state
-#   - state_means: List of state-dependent means for time-varying covariates
-#   - covariate_effects: List specifying how covariates influence transitions
-#   - seed: Random seed for reproducibility
-#
-# Returns:
-#   - List containing:
-#     * data: Simulated panel dataset with:
-#       - ID, wave, state (y)
-#       - Time-invariant covariates (x1, x3)
-#       - Time-varying covariates (x2, x4, x5)
-#     * transition_matrix: Used transition probabilities
-#     * initial_probs: Used initial state probabilities
-#     * adjusted_probs: Final adjusted probabilities
-#     * trans_probs: Final transition probabilities
-#     * state_means: State-dependent means used
-#     * covariate_effects: Covariate effects applied
-#
-# Features:
-#   - Realistic aging trajectory simulation (x2 increases over time)
-#   - Bounded time-varying covariates (x4: 0-8, x5: 0-60)
-#   - Multiple covariate effects on transitions:
-#     * x1: Gender (weak effect)
-#     * x2: Age (strong effect)
-#     * x3: Education (moderate effect)
-#     * x4/x5: State-dependent time-varying effects
-#   - Automatic transition matrix generation if none provided
-#   - Comprehensive input validation
-
 simulate_data <- function(
     n_subjects = 100,                 # Number of individuals
     n_waves = 3,                      # Number of waves
-    y = 1:3,                          # Number of different states (possible transitions)
-    initial_probs = rep(1 / length(y), length(y)), # Initial probabilities
-    true_betas = list(
-      alpha  = c(-5.152, -5.402),   # True intercepts
-      beta_1 = c(0.008, -0.034),    # True beta 1
-      beta_2 = c(0.036, 0.017),     # True beta 2
-      beta_3 = c(0.028, 0.045)      # True beta 3
-    ),
-    # state_means = c(10, 25, 17),     # State dependent means (normal mu)
-    # covariate_effects = list(        # Covariate effects
-      # x2 = c(0, 0.5, 0.1),           # Effect of x2 on state transitions
-      # x3 = c(0, 0.4, 0.7)),          # Effect of x3 on state transitions
-    seed = NULL) {                   # Seed (for reproducibility)
+    scenario = 1:3,                   # What simulation scenario to run
+    seed = NULL) {                    # Seed (for reproducibility)
   
   # Set seed for reproducibility -----------------------------------------------
   if(!is.null(seed)) set.seed(seed)
+  
+  # True beta values to be used in the simulation ------------------------------
+  beta_scenario_1 <- list(
+    alpha  = c(-5.152, -5.402),
+    beta_1 = c(0.008, -0.034),
+    beta_2 = c(0.036, 0.017),
+    beta_3 = c(0.028, 0.045)
+  )
+  
+  beta_scenario_2 <- list(
+    alpha  = c(-5.370, -7.907),
+    beta_1 = c(0.020, -0.011),
+    beta_2 = c(0.036, 0.039),
+    beta_3 = c(0.022, 0.016),
+    beta_4 = c(1.711, 2.790),
+    beta_5 = c(-0.776, 20.914)
+  )
+  
+  beta_scenario_3 <- list(
+    alpha  = c(-5.885, -10.613),
+    beta_1 = c(0.102, 0.615),
+    beta_2 = c(0.043, 0.076),
+    beta_3 = c(0.019, -0.002),
+    beta_4 = c(3.845, 7.901),
+    beta_5 = c(-0.638, 12.753),
+    beta_6 = c(-0.292, -1.019),
+    beta_7 = c(-0.474, -1.268),
+    beta_8 = c(-0.031, -0.072),
+    beta_9 = c(0.093, 0.100), 
+    beta_10 = c(0.008, 0.029),
+    beta_11 = c(-0.082, -0.021)
+  )
   
   # Simulating data ------------------------------------------------------------
   # Simulate subject-level characteristics (time-invariant)
@@ -75,20 +58,41 @@ simulate_data <- function(
     x5 = round(runif(n = n_subjects, min = 0, max = 1), digits = 2)
   )
   
+  # Simulating a wave 0 for use in scenario 2 and 3 ----------------------------
+  if(scenario != 1) {
+    
+    wave_0 <- vector("list", n_subjects)
+    
+    # Using scenario 1 betas to simulate y
+    for(id in 1:n_subjects) {
+      subj <- subject_data[id, ]
+      
+      probs <- get_probabilities(
+        x1 = subj$x1, x2 = subj$x2, x3 = subj$x3, 
+        y_prev = NULL, betas = beta_scenario_1, scenario = 1)
+      
+      draw_0 <- rmultinom(n = 1, size = 1, prob = probs)
+      y_0 <- which(draw_0 == 1)
+      
+      wave_0[[id]] <- data.frame(
+        ID = id, w = 0, y = factor(y_0, levels = 1:3),
+        x1 = subj$x1, x2 = subj$x2, x3 = subj$x3, 
+        x4 = subj$x4, x5 = subj$x5)
+    }
+    
+    wave_0_df <- bind_rows(wave_0)
+  }
+  
   # Preallocating results (for better optimization)
   total_rows <- n_subjects * n_waves
   panel_list <- vector("list", total_rows)
   pi_values <- vector("list", total_rows)
   row_index  <- 1
   
-  # For outputting the probabilities used for the multinomial regression
-  # starting_probs   <- vector("list", total_rows)
-  # transition_probs <- vector("list", total_rows)
-  
-  # Simulate time-varying outcomes
   # Progress bar
   pb <- utils::txtProgressBar(min = 0, max = n_subjects, style = 3)
   
+  # Simulate time-varying outcomes ---------------------------------------------
   for(id in 1:n_subjects) {
     
     # Start progress
@@ -97,40 +101,22 @@ simulate_data <- function(
     # Get individual level subject data
     subj <- subject_data[id, ]
     
+    # Getting scenario specific data (previous y and beta values)
+    y_prev <- if(scenario != 1) wave_0_df$y[wave_0_df$ID == id] else NULL
+    
+    betas <- if(scenario == 2) beta_scenario_2 else if(scenario == 3) beta_scenario_3 else beta_scenario_1
+    
     # Get probabilities from true beta values ----------------------------------
-    # Calculating pi_1
-    denom <- 1 + 
-      exp(true_betas$alpha[1] + 
-            true_betas$beta_1[1] * subj$x1 + 
-            true_betas$beta_2[1] * subj$x2 + 
-            true_betas$beta_3[1] * subj$x3) + 
-      exp(true_betas$alpha[2] + 
-            true_betas$beta_1[2] * subj$x1 + 
-            true_betas$beta_2[2] * subj$x2 + 
-            true_betas$beta_3[2] * subj$x3)
-
-    
-    pi_1 <- 1 / denom
-    
-    # Calculating pi_2
-    pi_2 <- pi_1 * exp(true_betas$alpha[1] + 
-                         true_betas$beta_1[1] * subj$x1 + 
-                         true_betas$beta_2[1] * subj$x2 + 
-                         true_betas$beta_3[1] * subj$x3)
-    
-    # Calculating pi_3
-    pi_3 <- pi_1 * exp(true_betas$alpha[2] + 
-                         true_betas$beta_1[2] * subj$x1 + 
-                         true_betas$beta_2[2] * subj$x2 + 
-                         true_betas$beta_3[2] * subj$x3)
+    probs <- get_probabilities(
+      x1 = subj$x1, x2 = subj$x2, x3 = subj$x3,
+      y_prev = y_prev, betas = betas, scenario = scenario)
     
     # Making (and saving) a vector of probabilities used in multinomial draws
-    probs <- c(pi_1, pi_2, pi_3)
     pi_values[[row_index]] <- probs
     
     # Simulate initial state from a multinomial distribution
     draw_init <- rmultinom(n = 1, size = 1, prob = probs)
-    y <- which(draw_init == 1)
+    y <- factor(which(draw_init == 1), levels = 1:3)
 
     # 🎶 I love them double for loops baby 🎶
     for(wave in 1:n_waves) {
@@ -163,40 +149,22 @@ simulate_data <- function(
       
       # Simulating transitions for next wave based off time varying predictors
       if(wave %in% c(2:tail(n_waves))) {
+        
+        # For use in scenario 2 and 3
+        y_prev <- panel_list[[row_index]]$y
+        
         # Get new probabilities from true beta values --------------------------
-        # Calculating pi_1
-        denom <- 1 +
-          exp(true_betas$alpha[1] +
-                true_betas$beta_1[1] * panel_list[[row_index]]$x1 +
-                true_betas$beta_2[1] * panel_list[[row_index]]$x2 +
-                true_betas$beta_3[1] * panel_list[[row_index]]$x3) +
-          exp(true_betas$alpha[2] +
-                true_betas$beta_1[2] * panel_list[[row_index]]$x1 +
-                true_betas$beta_2[2] * panel_list[[row_index]]$x2 +
-                true_betas$beta_3[2] * panel_list[[row_index]]$x3)
-        
-        pi_1 <- 1 / denom
-        
-        # Calculating pi_2
-        pi_2 <- pi_1 * exp(true_betas$alpha[1] +
-                             true_betas$beta_1[1] * panel_list[[row_index]]$x1 +
-                             true_betas$beta_2[1] * panel_list[[row_index]]$x2 +
-                             true_betas$beta_3[1] * panel_list[[row_index]]$x3)
-        
-        # Calculating pi_3
-        pi_3 <- pi_1 * exp(true_betas$alpha[2] +
-                             true_betas$beta_1[2] * panel_list[[row_index]]$x1 +
-                             true_betas$beta_2[2] * panel_list[[row_index]]$x2 +
-                             true_betas$beta_3[2] * panel_list[[row_index]]$x3)
+        probs <- get_probabilities(
+          x1 = panel_list[[row_index]]$x1, x2 = panel_list[[row_index]]$x2,
+          x3 = panel_list[[row_index]]$x3, y_prev = y_prev, betas = betas, scenario = scenario)
         
         # These are new pi values based off the now time varying predictors
-        probs <- c(pi_1, pi_2, pi_3)
         pi_values[[row_index]] <- probs
         
         # Simulate next state from a multinomial distribution
         draw_init <- rmultinom(n = 1, size = 1, prob = probs)
         
-        panel_list[[row_index]]$y <- which(draw_init == 1)
+        panel_list[[row_index]]$y <- factor(which(draw_init == 1), levels = 1:3)
       } # End of if(wave < n_waves)
       
       # Do next row
@@ -225,7 +193,7 @@ simulate_data <- function(
   # Returning data
   return(list(
     data              = panel_data,
-    true_betas        = true_betas,
+    true_betas        = betas,
     pi_values         = pi_df
   ))
 }
