@@ -1,8 +1,5 @@
-# More complex set up with custom parameters for number of: 
-#   - States
-#   - Waves
-#   - State specific means (x4 = lambda values; x5 = mu values)
-#   - State specific covariate effects (effects on transition probabilities)
+# Simulation Scenario 2
+# Assuming an additive previous response effect
 # ------------------------------------------------------------------------------
 
 rm(list = ls()) # Again, to annoy Rafael

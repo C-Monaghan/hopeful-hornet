@@ -1,4 +1,5 @@
-# Simple simulation keeping all default parameters
+# Simulation Scenario 1 
+# Assuming no previous response effect
 # ------------------------------------------------------------------------------
 
 rm(list = ls()) # To annoy Rafael
@@ -12,7 +13,7 @@ functions <- list.files(path = here::here("R/"), full.names = TRUE)
 sapply(functions, source)
 
 # Simulating data with default parameters --------------------------------------
-simulation <- simulate_data(n_subjects = 5000, scenario = 2, seed = 123)$data
+simulation <- simulate_data(n_subjects = 5000, scenario = 1, seed = 123)
 
 data <- simulation$data |>
   add_previous_status()
@@ -34,12 +35,19 @@ plot_multiple_transitions(models$obs_trans, sample_size = "n_1000", reps = 1:6)
 # Estimated transition matrices
 estimate_matrices <- estimate_transition_matrices(models, models$test_data)
 
-# Splitting based on good and bad
-good_predictions <- estimate_matrices$estimated_transitions_good
-bad_predictions  <- estimate_matrices$estimated_transitions_bad
+# Splitting into each respective model
+null_predictions  <- estimate_matrices$null_models
+red_1_predictions <- estimate_matrices$red_1_models
+red_2_predictions <- estimate_matrices$red_2_models
+true_predictions  <- estimate_matrices$true_models
+over_predictions  <- estimate_matrices$of_models
 
 # Plotting
-plot_transitions(good_predictions, sample_size = "n_1000",rep = 1, obs = FALSE)
+plot_transitions(null_predictions, sample_size = "n_1000",rep = 1, obs = FALSE)
+
+
+
+
 plot_transitions(bad_predictions, sample_size = "n_1000", rep = 1, obs = FALSE)
 
 plot_multiple_transitions(good_predictions, sample_size = "n_100", obs = FALSE)
