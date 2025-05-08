@@ -30,17 +30,29 @@
 #   - Skips problematic cases while continuing processing
 #   - Returns meaningful error if no metrics calculated
 # 
-calculate_matrix_distances <- function(results, sample_size = NULL, 
-                                       rep = NULL, epsilon = 1e-10, type = "bar") {
+calculate_matrix_distances <- function(
+    results, 
+    sample_size = NULL,
+    rep = NULL, 
+    epsilon = 1e-10) {
   
   # Validations ----------------------------------------------------------------
   
   # 1. Validate input structure
   
-  if (!all(c("obs_trans", 
-             "estimated_transitions_good", 
-             "estimated_transitions_bad") %in% names(results))) {
-    stop("Input results missing required components. Expected: obs_trans, estimated_transitions_good, estimated_transitions_bad")
+  if (!all(c(
+    "obs_trans",
+    "estimated_transitions_null", 
+    "estimated_transitions_red_1",
+    "estimated_transitions_red_2",
+    "estimated_transitions_true",
+    "estimated_transitions_overfit"
+    ) %in% names(results))) {
+    stop(
+      "Input results missing required components.\n 
+      Expected: 1. obs_trans,\n 2. estimated_transitions_null,\n 
+      3. estimated_transitions_red_1,\n 4. estimated_transitions_red_2,\n
+      5. estimated_transitions_true,\n 6. estimated_transitions_overfit")
   }
   
   # 2. Get available sample sizes
@@ -81,25 +93,30 @@ calculate_matrix_distances <- function(results, sample_size = NULL,
   for(size in sample_size) {
     for(r in rep) {
       tryCatch({
-        # Get observed and estimated (good and bad) matrices
-        p <- results$obs_trans[[size]][[r]]
-        good <- results$estimated_transitions_good[[size]][[r]]
-        bad <- results$estimated_transitions_bad[[size]][[r]]
+        # Get observed matrix
+        p  <- results$obs_trans[[size]][[r]]
+        
+        
+        # Get estimated matrices
+        models <- list(
+          "Null"      = results$estimated_transitions_null[[size]][[r]],
+          "Reduced_1" = results$estimated_transitions_red_1[[size]][[r]],
+          "Reduced_2" = results$estimated_transitions_red_2[[size]][[r]],
+          "True"      = results$estimated_transitions_true[[size]][[r]],
+          "Overfit"   = results$estimated_transitions_overfit[[size]][[r]]
+        )
       
-        # Verify matrices
-        if (is.null(p) || is.null(good) || is.null(bad)) {
-          warning("Missing matrix for ", size, " rep ", r)
-          next
-        }
-      
-        # Calculate distance based metrics
-        for(model in c("good", "bad")) {
-          p_hat <- if(model == "good") good else bad
+        # Calculate distance for each model
+        for(model_name in names(models)) {
+          p_hat <- models[[model_name]]
+          
+          # Skip if any matrix is missing
+          if (is.null(p) || is.null(p_hat)) next
         
           distances <- tibble::tibble(
             sample_size = size,
             repitition = r,
-            model_type = model,
+            model_type = model_name,
             metric = c("Frobenius", "Manhattan", "Max", "MeanAbs", "RMSE", "Correlation", "KL"),
             value = c(
               norm(p - p_hat, type = "F"),
@@ -111,7 +128,7 @@ calculate_matrix_distances <- function(results, sample_size = NULL,
               sum((p + epsilon) * log((p + epsilon) / (p_hat + epsilon)))
             ))
         
-          metrics_list[[paste(size, r, model)]] <- distances
+          metrics_list[[paste(size, r, model_name)]] <- distances
         } # End of for(model in c("good", "bad"))
       }, error = function(e) {
         message("Error processing ", size, " rep ", r, ": ", e$message)
@@ -124,34 +141,44 @@ calculate_matrix_distances <- function(results, sample_size = NULL,
     stop("No distance metrics calculated. Check your input data structure.")
   }
   
+  # Data processing ------------------------------------------------------------
   # Combine all metrics
-    metrics_df <- dplyr::bind_rows(metrics_list) |>
-      dplyr::mutate(
-        metric = dplyr::case_when(
-          metric == "Frobenius" ~ "Frobenius Distance",
-          metric == "Manhattan" ~ "Manhattan Distance",
-          metric == "Max" ~ "Max Difference",
-          metric == "MeanAbs" ~ "Mean Absolute Difference",
-          metric == "RMSE" ~ "Root Mean Square Error",
-          metric == "Correlation" ~ "Correlation Distance",
-          metric == "KL" ~ "Kullback-Leibler Divergence"
-        ),
-        model_type = ifelse(model_type == "good", "Well-Specified Model", "Misspecified Model")
+  metrics_df <- dplyr::bind_rows(metrics_list) |>
+    dplyr::mutate(
+      metric = dplyr::case_when(
+        metric == "Frobenius" ~ "Frobenius Distance",
+        metric == "Manhattan" ~ "Manhattan Distance",
+        metric == "Max" ~ "Max Difference",
+        metric == "MeanAbs" ~ "Mean Absolute Difference",
+        metric == "RMSE" ~ "Root Mean Square Error",
+        metric == "Correlation" ~ "Correlation Distance",
+        metric == "KL" ~ "Kullback-Leibler Divergence"
+      ),
+      model_type = dplyr::case_when(
+        model_type == "Null" ~ "Null Model",
+        model_type == "Reduced_1" ~ "Reduced Model 1",
+        model_type == "Reduced_2" ~ "Reduced Model 2",
+        model_type == "True" ~ "True Model",
+        model_type == "Overfit" ~ "Overfit Model",
+        TRUE ~ model_type
       )
+    )
     
-    metrics_df <- metrics_df |>
-      dplyr::mutate(
-        sample_size = factor(sample_size, levels = sample_sizes),
-        model_type = factor(model_type, levels = c("Well-Specified Model", "Misspecified Model")),
-        metric = factor(metric, levels = c(
-          "Manhattan Distance", 
-          "Frobenius Distance", 
-          "Max Difference",
-          "Mean Absolute Difference",
-          "Root Mean Square Error",
-          "Correlation Distance",
-          "Kullback-Leibler Divergence"))
-      )
+  # Convert to factors with meaningful ordering
+  metrics_df <- metrics_df |>
+    dplyr::mutate(
+      sample_size = factor(sample_size, levels = sample_sizes),
+      model_type = factor(model_type, levels = c(
+        "Null Model", "Reduced Model 1", "Reduced Model 2", 
+        "True Model", "Overfit Model")),
+      metric = factor(metric, levels = c(
+        "Manhattan Distance", 
+        "Frobenius Distance", 
+        "Max Difference",
+        "Mean Absolute Difference",
+        "Root Mean Square Error",
+        "Correlation Distance",
+        "Kullback-Leibler Divergence")))
   
   return(metrics_df)
 }

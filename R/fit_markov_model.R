@@ -261,8 +261,8 @@ fit_markov_model <- function(
   
   # Add execution metadata to results
   # Add execution metadata to results
-  results$metadata$completion_time <- Sys.time()
-  results$metadata$seed_used <- seed
+  results$meta_data$completion_time <- Sys.time()
+  results$meta_data$seed_used <- seed
   
   message("\nModel fitting completed successfully")
   message("Training samples used: ", length(unique_train_ids))
