@@ -23,8 +23,7 @@ models <- fit_markov_model(
   data = data, 
   sample_sizes = c(100, 250, 1000), 
   n_reps = 200,
-  method = "Base",
-  parallel = TRUE,
+  parallel = FALSE,
   seed = 125)
 
 # Estimated transition matrices
@@ -58,7 +57,7 @@ distance_box <- distances |>
     sample_size = stringr::str_replace(sample_size, "_", " = "),
     sample_size = factor(sample_size, levels = c("n = 100", "n = 250", "n = 1000"))
   ) |>
-  ggplot(aes(x = metric, y = value, fill = metric)) +
+  ggplot(aes(x = model_type, y = log(value), fill = model_type)) +
   geom_boxplot() +
   ggokabeito::scale_fill_okabe_ito() +
   labs(
@@ -66,7 +65,7 @@ distance_box <- distances |>
     subtitle = "Across sample sizes",
     x = "Distance based metric",
     y = "Distance Value") +
-  facet_grid(model_type ~ sample_size) +
+  facet_grid(metric ~ sample_size, scales = "free_y") +
   theme_bw() +
   theme(
     plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),

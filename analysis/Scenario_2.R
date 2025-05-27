@@ -28,7 +28,10 @@ models <- fit_markov_model(
   seed = 125)
 
 # Estimated transition matrices
-estimate_matrices <- estimate_transition_matrices(models, models$test_data)
+estimate_matrices <- estimate_transition_matrices(models, models$test_data) # Fix for 2 transition matrices
+
+# Multiply matrices (for scenario 2 & 3)
+#   
 
 # Splitting into each respective model
 matrices <- list(
@@ -58,7 +61,7 @@ distance_box <- distances |>
     sample_size = stringr::str_replace(sample_size, "_", " = "),
     sample_size = factor(sample_size, levels = c("n = 100", "n = 250", "n = 1000"))
   ) |>
-  ggplot(aes(x = metric, y = value, fill = metric)) +
+  ggplot(aes(x = model_type, y = log(value), fill = metric)) +
   geom_boxplot() +
   ggokabeito::scale_fill_okabe_ito() +
   labs(
@@ -66,7 +69,7 @@ distance_box <- distances |>
     subtitle = "Across sample sizes",
     x = "Distance based metric",
     y = "Distance Value") +
-  facet_grid(model_type ~ sample_size) +
+  facet_grid(metric ~ sample_size, scales = "free_y") +
   theme_bw() +
   theme(
     plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
@@ -111,7 +114,7 @@ export_path <- "analysis/results/02__additive"
 cowplot::save_plot(
   filename = here::here(export_path, "distance_boxplot.png"),
   plot = distance_box,
-  base_height = 8, base_width = 10
+  base_height = 10, base_width = 10
 )
 
 cowplot::save_plot(
