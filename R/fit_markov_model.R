@@ -13,10 +13,6 @@
 #     * x1-x3: Predictor variables
 #   - sample_sizes: Vector of sample sizes to evaluate model performance
 #   - n_reps: Number of repetitions per sample size
-#   - method: Character specifying modeling approach
-#     1. "Base": Model without Markov dependency
-#     2. "Additive": Model with additive previous state effect
-#     3. "Multiplicative": Model with interaction between predictors and previous state
 #   - parallel: Logical indicating if parallel processing should be used
 #   - n_cores: Number of cores to use for parallel processing (default is all but one)
 #   - seed: Optional random seed for reproducibility
@@ -37,7 +33,7 @@
 #   2. For each sample size:
 #     a) Samples n individuals from training set
 #     b) Calculates observed transition matrix
-#     c) Fits five model specifications of increasing complexity
+#     c) Fits fifteen model specifications of increasing complexity
 #   3. Repeats process n_reps times per sample size
 #   4. Supports parallel execution for computationally intensive scenarios
 #
@@ -46,20 +42,17 @@ fit_markov_model <- function(
     data,
     sample_sizes = c(100, 250, 1000),
     n_reps = 200,
-    method = c("Base", "Additive", "Multiplicative"),
     parallel = FALSE,
     n_cores = parallel::detectCores() - 1,
     seed = NULL) {
   
   # Input validation -----------------------------------------------------------
-  method <- match.arg(method)
-  stopifnot(
-    is.data.frame(data),
-    all(c("ID", "y_prev", "y") %in% names(data)),
-    is.numeric(sample_sizes),
-    is.numeric(n_reps) && n_reps > 0,
-    is.logical(parallel),
-    is.numeric(n_cores) && n_cores > 0
+  stopifnot(is.data.frame(data),
+            all(c("ID", "y_prev", "y") %in% names(data)),
+            is.numeric(sample_sizes),
+            is.numeric(n_reps) && n_reps > 0,
+            is.logical(parallel),
+            is.numeric(n_cores) && n_cores > 0
   )
   
   # Initialize random seed if provided -----------------------------------------
@@ -76,40 +69,62 @@ fit_markov_model <- function(
   
   unique_train_ids <- unique(train_data$ID)
   
-  # Results structure initialization -------------------------------------------
-  # Pre-allocate lists for storing results with meaningful names
+  # Pre-allocate lists for storing results with meaningful names ---------------
   results <- list(
-    null_models  = vector(mode = "list", length = length(sample_sizes)),
-    red_1_models = vector(mode = "list", length = length(sample_sizes)),
-    red_2_models = vector(mode = "list", length = length(sample_sizes)),
-    true_models  = vector(mode = "list", length = length(sample_sizes)),
-    of_models    = vector(mode = "list", length = length(sample_sizes)),
-    obs_trans    = vector("list", length(sample_sizes)),
-    test_data    = test_data,
-    meta_data    = list(
-      sample_sizes = sample_sizes,
-      n_reps       = n_reps,
-      method       = method,
-      train_size   = length(unique_train_ids),
-      test_size    = length(test_id)
+    base_models     = structure(list(
+      null_models   = vector("list", length(sample_sizes)),
+      red_1_models  = vector("list", length(sample_sizes)),
+      red_2_models  = vector("list", length(sample_sizes)),
+      true_models   = vector("list", length(sample_sizes)),
+      of_models     = vector("list", length(sample_sizes))
+    ), .Names = c("null_models", "red_1_models", "red_2_models", "true_models", "of_models")),
+    
+    additive_models = structure(list(
+      null_models   = vector("list", length(sample_sizes)),
+      red_1_models  = vector("list", length(sample_sizes)),
+      red_2_models  = vector("list", length(sample_sizes)),
+      true_models   = vector("list", length(sample_sizes)),
+      of_models     = vector("list", length(sample_sizes))
+    ), .Names       = c("null_models", "red_1_models", "red_2_models", "true_models", "of_models")),
+    
+    multiplicative_models = structure(list(
+      null_models   = vector("list", length(sample_sizes)),
+      red_1_models  = vector("list", length(sample_sizes)),
+      red_2_models  = vector("list", length(sample_sizes)),
+      true_models   = vector("list", length(sample_sizes)),
+      of_models     = vector("list", length(sample_sizes))
+    ), .Names       = c("null_models", "red_1_models", "red_2_models", "true_models", "of_models")),
+    
+    obs_trans       = structure(vector("list", length(sample_sizes)), .Names = paste0("n_", sample_sizes)),
+    test_data       = test_data,
+    meta_data  = list(
+      sample_sizes  = sample_sizes,
+      n_reps        = n_reps,
+      train_size    = length(unique_train_ids),
+      test_size     = length(test_id)
     )
   )
   
-  # Naming lists for easy understanding
-  size_names                  <- paste0("n_", sample_sizes)
+  # Name the top-level components
+  names(results) <- c(
+    "base_models", "additive_models", "multiplicative_models",
+    "obs_trans", "test_data", "meta_data")
   
-  names(results$null_models)  <- size_names
-  names(results$red_1_models) <- size_names
-  names(results$red_2_models) <- size_names
-  names(results$true_models)  <- size_names
-  names(results$of_models)    <- size_names
+  # Name the sample size elements for each model type
+  size_names <- paste0("n_", sample_sizes)
   
-  names(results$obs_trans)   <- paste0("n_", sample_sizes)
+  for(model_type in c("base_models", "additive_models", "multiplicative_models")) {
+    for(model_complexity in names(results[[model_type]])) {
+      names(results[[model_type]][[model_complexity]]) <- size_names
+    }
+  }
+  
+  names(results$obs_trans)   <- size_names
   
   # Model fitting worker function ----------------------------------------------
   # Centralized function to handle model fitting for both parallel and 
   # serial execution
-  fit_worker <- function(n, method) {
+  fit_worker <- function(n) {
     replicate(n_reps, {
       # Sample subjects (not individual observations) to maintain data structure
       sample_ids <- sample(unique_train_ids, size = n)
@@ -119,34 +134,32 @@ fit_markov_model <- function(
       transitions <- table(From = sample_data$y_prev, To = sample_data$y)
       obs_matrix <- round(prop.table(transitions, margin = 1), 2)
       
-      # Fit models based on specified method
-      if(method == "Base") { # Scenario 1
+      # Fitting all 15 models
       list(
-        null_model  = nnet::multinom(y ~ 1, data = sample_data, trace = FALSE),
-        red_1_model = nnet::multinom(y ~ x1, data = sample_data, trace = FALSE,),
-        red_2_model = nnet::multinom(y ~ x1 + x2, data = sample_data, trace = FALSE,),
-        true_model  = nnet::multinom(y ~ x1 + x2 + x3, data = sample_data, trace = FALSE,),
-        of_model    = nnet::multinom(y ~ x1 + x2 + x3 + x4 + x5, data = sample_data, trace = FALSE,),
-        obs_matrix  = obs_matrix
-      )} else if(method == "Additive") { # Scenario 2
-        list(
-          null_model  = nnet::multinom(y ~ y_prev, data = sample_data, trace = FALSE),
-          red_1_model = nnet::multinom(y ~ x1 + y_prev, data = sample_data, trace = FALSE,),
-          red_2_model = nnet::multinom(y ~ x1 + x2 + y_prev, data = sample_data, trace = FALSE,),
-          true_model  = nnet::multinom(y ~ x1 + x2 + x3 + y_prev, data = sample_data, trace = FALSE,),
-          of_model    = nnet::multinom(y ~ x1 + x2 + x3 + x4 + x5 + y_prev, data = sample_data, trace = FALSE,),
-          obs_matrix  = obs_matrix
-        )
-      } else if(method == "Multiplicative") { # Scenario 3
-        list(
-          null_model  = nnet::multinom(y ~ y_prev, data = sample_data, trace = FALSE),
-          red_1_model = nnet::multinom(y ~ (x1 * y_prev), data = sample_data, trace = FALSE,),
-          red_2_model = nnet::multinom(y ~ (x1 + x2) * y_prev, data = sample_data, trace = FALSE,),
-          true_model  = nnet::multinom(y ~ (x1 + x2 + x3) * y_prev, data = sample_data, trace = FALSE,),
-          of_model    = nnet::multinom(y ~ (x1 + x2 + x3 + x4 + x5) * y_prev, data = sample_data, trace = FALSE,),
-          obs_matrix  = obs_matrix
-        )
-      }
+        # Base models (no Markov dependency)
+        base_null  = nnet::multinom(y ~ 1, data = sample_data, trace = FALSE),
+        base_red1  = nnet::multinom(y ~ x1, data = sample_data, trace = FALSE),
+        base_red2  = nnet::multinom(y ~ x1 + x2, data = sample_data, trace = FALSE),
+        base_true  = nnet::multinom(y ~ x1 + x2 + x3, data = sample_data, trace = FALSE),
+        base_of    = nnet::multinom(y ~ x1 + x2 + x3 + x4 + x5, data = sample_data, trace = FALSE),
+        
+        # Additive models (with y_prev column)
+        add_null   = nnet::multinom(y ~ y_prev, data = sample_data, trace = FALSE),
+        add_red1   = nnet::multinom(y ~ x1 + y_prev, data = sample_data, trace = FALSE),
+        add_red2   = nnet::multinom(y ~ x1 + x2 + y_prev, data = sample_data, trace = FALSE),
+        add_true   = nnet::multinom(y ~ x1 + x2 + x3 + y_prev, data = sample_data, trace = FALSE),
+        add_of     = nnet::multinom(y ~ x1 + x2 + x3 + x4 + x5 + y_prev, data = sample_data, trace = FALSE),
+        
+        # Multiplicative models (with interactions)
+        mult_null  = nnet::multinom(y ~ y_prev, data = sample_data, trace = FALSE),
+        mult_red1  = nnet::multinom(y ~ (x1 * y_prev), data = sample_data, trace = FALSE),
+        mult_red2  = nnet::multinom(y ~ (x1 + x2) * y_prev, data = sample_data, trace = FALSE),
+        mult_true  = nnet::multinom(y ~ (x1 + x2 + x3) * y_prev, data = sample_data, trace = FALSE),
+        mult_of    = nnet::multinom(y ~ (x1 + x2 + x3 + x4 + x5) * y_prev, data = sample_data, trace = FALSE),
+        
+        # Observed transition matrix
+        obs_matrix = obs_matrix
+      )
     }, simplify = FALSE)
   }
   
@@ -178,16 +191,13 @@ fit_markov_model <- function(
     
     # Set RNG seed for reproducible parallel execution
     if(!is.null(seed)) doRNG::registerDoRNG(seed)
-      
+    
     # Process each sample size
     for(i in seq_along(sample_sizes)) {
       n <- sample_sizes[i]
       
       rep_results <- foreach::foreach(
-        reps = 1:n_reps, 
-        .packages = "nnet", 
-        .options.snow = opts
-        ) %dorng% {
+        reps = 1:n_reps, .packages = "nnet", .options.snow = opts) %dorng% {
           
           # Sample subjects (not individual observations) to maintain data structure
           sample_ids <- sample(unique_train_ids, size = n)
@@ -197,45 +207,54 @@ fit_markov_model <- function(
           transitions <- table(From = sample_data$y_prev, To = sample_data$y)
           obs_matrix <- round(prop.table(transitions, margin = 1), 2)
           
-          # Model fitting (same as in fit_worker)
-          if(method == "Base") {
-            list(
-              null_model  = nnet::multinom(y ~ 1, data = sample_data, trace = FALSE),
-              red_1_model = nnet::multinom(y ~ x1, data = sample_data, trace = FALSE,),
-              red_2_model = nnet::multinom(y ~ x1 + x2, data = sample_data, trace = FALSE,),
-              true_model  = nnet::multinom(y ~ x1 + x2 + x3, data = sample_data, trace = FALSE,),
-              of_model    = nnet::multinom(y ~ x1 + x2 + x3 + x4 + x5, data = sample_data, trace = FALSE,),
-              obs_matrix  = obs_matrix
-            )} else if(method == "Additive") {
-              list(
-                null_model  = nnet::multinom(y ~ y_prev, data = sample_data, trace = FALSE),
-                red_1_model = nnet::multinom(y ~ x1 + y_prev, data = sample_data, trace = FALSE,),
-                red_2_model = nnet::multinom(y ~ x1 + x2 + y_prev, data = sample_data, trace = FALSE,),
-                true_model  = nnet::multinom(y ~ x1 + x2 + x3 + y_prev, data = sample_data, trace = FALSE,),
-                of_model    = nnet::multinom(y ~ x1 + x2 + x3 + x4 + x5 + y_prev, data = sample_data, trace = FALSE,),
-                obs_matrix  = obs_matrix
-              )
-            } else if(method == "Multiplicative") {
-              list(
-                null_model  = nnet::multinom(y ~ y_prev, data = sample_data, trace = FALSE),
-                red_1_model = nnet::multinom(y ~ (x1 * y_prev), data = sample_data, trace = FALSE,),
-                red_2_model = nnet::multinom(y ~ (x1 + x2) * y_prev, data = sample_data, trace = FALSE,),
-                true_model  = nnet::multinom(y ~ (x1 + x2 + x3) * y_prev, data = sample_data, trace = FALSE,),
-                of_model    = nnet::multinom(y ~ (x1 + x2 + x3 + x4 + x5) * y_prev, data = sample_data, trace = FALSE,),
-                obs_matrix  = obs_matrix
-              )
-            }
+          # Fit all models
+          list(
+            # Base models (no Markov dependency)
+            base_null = nnet::multinom(y ~ 1, data = sample_data, trace = FALSE),
+            base_red1 = nnet::multinom(y ~ x1, data = sample_data, trace = FALSE),
+            base_red2 = nnet::multinom(y ~ x1 + x2, data = sample_data, trace = FALSE),
+            base_true = nnet::multinom(y ~ x1 + x2 + x3, data = sample_data, trace = FALSE),
+            base_of   = nnet::multinom(y ~ x1 + x2 + x3 + x4 + x5, data = sample_data, trace = FALSE),
+            
+            # Additive models (with y_prev)
+            add_null = nnet::multinom(y ~ y_prev, data = sample_data, trace = FALSE),
+            add_red1 = nnet::multinom(y ~ x1 + y_prev, data = sample_data, trace = FALSE),
+            add_red2 = nnet::multinom(y ~ x1 + x2 + y_prev, data = sample_data, trace = FALSE),
+            add_true = nnet::multinom(y ~ x1 + x2 + x3 + y_prev, data = sample_data, trace = FALSE),
+            add_of   = nnet::multinom(y ~ x1 + x2 + x3 + x4 + x5 + y_prev, data = sample_data, trace = FALSE),
+            
+            # Multiplicative models (with interactions)
+            mult_null = nnet::multinom(y ~ y_prev, data = sample_data, trace = FALSE),
+            mult_red1 = nnet::multinom(y ~ (x1 * y_prev), data = sample_data, trace = FALSE),
+            mult_red2 = nnet::multinom(y ~ (x1 + x2) * y_prev, data = sample_data, trace = FALSE),
+            mult_true = nnet::multinom(y ~ (x1 + x2 + x3) * y_prev, data = sample_data, trace = FALSE),
+            mult_of   = nnet::multinom(y ~ (x1 + x2 + x3 + x4 + x5) * y_prev, data = sample_data, trace = FALSE),
+            
+            obs_matrix = obs_matrix
+          )
         } # End of %dopar%
       
-      # Storing results
-      results$null_models[[i]]  <- lapply(rep_results, `[[`, "null_model")
-      results$red_1_models[[i]] <- lapply(rep_results, `[[`, "red_1_model")
-      results$red_2_models[[i]] <- lapply(rep_results, `[[`, "red_2_model")
-      results$true_models[[i]]  <- lapply(rep_results, `[[`, "true_model")
-      results$of_models[[i]]    <- lapply(rep_results, `[[`, "of_model")
+      # Store results in organized structure
+      results$base_models$null_models[[i]]            <- lapply(rep_results, `[[`, "base_null")
+      results$base_models$red_1_models[[i]]           <- lapply(rep_results, `[[`, "base_red1")
+      results$base_models$red_2_models[[i]]           <- lapply(rep_results, `[[`, "base_red2")
+      results$base_models$true_models[[i]]            <- lapply(rep_results, `[[`, "base_true")
+      results$base_models$of_models[[i]]              <- lapply(rep_results, `[[`, "base_of")
       
-      results$obs_trans[[i]]    <- lapply(rep_results, `[[`, "obs_matrix")
-  } # End of for(i in seq_along(sample_sizes))
+      results$additive_models$null_models[[i]]        <- lapply(rep_results, `[[`, "add_null")
+      results$additive_models$red_1_models[[i]]       <- lapply(rep_results, `[[`, "add_red1")
+      results$additive_models$red_2_models[[i]]       <- lapply(rep_results, `[[`, "add_red2")
+      results$additive_models$true_models[[i]]        <- lapply(rep_results, `[[`, "add_true")
+      results$additive_models$of_models[[i]]          <- lapply(rep_results, `[[`, "add_of")
+      
+      results$multiplicative_models$null_models[[i]]  <- lapply(rep_results, `[[`, "mult_null")
+      results$multiplicative_models$red_1_models[[i]] <- lapply(rep_results, `[[`, "mult_red1")
+      results$multiplicative_models$red_2_models[[i]] <- lapply(rep_results, `[[`, "mult_red2")
+      results$multiplicative_models$true_models[[i]]  <- lapply(rep_results, `[[`, "mult_true")
+      results$multiplicative_models$of_models[[i]]    <- lapply(rep_results, `[[`, "mult_of")
+      
+      results$obs_trans[[i]]                          <- lapply(rep_results, `[[`, "obs_matrix")
+    } # End of for(i in seq_along(sample_sizes))
     
     parallel::stopCluster(cl)
     
@@ -247,15 +266,28 @@ fit_markov_model <- function(
       
       message("Processing sample size ", sample_sizes[i], " (", i, "/", length(sample_sizes), ")")
       
-      rep_results <- fit_worker(sample_sizes[i], method = method)
+      rep_results <- fit_worker(n = sample_sizes[i])
       
-      results$null_models[[i]]  <- lapply(rep_results, `[[`, "null_model")
-      results$red_1_models[[i]] <- lapply(rep_results, `[[`, "red_1_model")
-      results$red_2_models[[i]] <- lapply(rep_results, `[[`, "red_2_model")
-      results$true_models[[i]]  <- lapply(rep_results, `[[`, "true_model")
-      results$of_models[[i]]    <- lapply(rep_results, `[[`, "of_model")
+      # Store results in organized structure
+      results$base_models$null_models[[i]]            <- lapply(rep_results, `[[`, "base_null")
+      results$base_models$red_1_models[[i]]           <- lapply(rep_results, `[[`, "base_red1")
+      results$base_models$red_2_models[[i]]           <- lapply(rep_results, `[[`, "base_red2")
+      results$base_models$true_models[[i]]            <- lapply(rep_results, `[[`, "base_true")
+      results$base_models$of_models[[i]]              <- lapply(rep_results, `[[`, "base_of")
       
-      results$obs_trans[[i]]    <- lapply(rep_results, `[[`, "obs_matrix")
+      results$additive_models$null_models[[i]]        <- lapply(rep_results, `[[`, "add_null")
+      results$additive_models$red_1_models[[i]]       <- lapply(rep_results, `[[`, "add_red1")
+      results$additive_models$red_2_models[[i]]       <- lapply(rep_results, `[[`, "add_red2")
+      results$additive_models$true_models[[i]]        <- lapply(rep_results, `[[`, "add_true")
+      results$additive_models$of_models[[i]]          <- lapply(rep_results, `[[`, "add_of")
+      
+      results$multiplicative_models$null_models[[i]]  <- lapply(rep_results, `[[`, "mult_null")
+      results$multiplicative_models$red_1_models[[i]] <- lapply(rep_results, `[[`, "mult_red1")
+      results$multiplicative_models$red_2_models[[i]] <- lapply(rep_results, `[[`, "mult_red2")
+      results$multiplicative_models$true_models[[i]]  <- lapply(rep_results, `[[`, "mult_true")
+      results$multiplicative_models$of_models[[i]]    <- lapply(rep_results, `[[`, "mult_of")
+      
+      results$obs_trans[[i]]                          <- lapply(rep_results, `[[`, "obs_matrix")
     } # End of for (i in seq_along(sample_sizes))
   }
   
