@@ -157,7 +157,7 @@ simulate_data <- function(
     y_prev <- if(scenario != 1) wave_0_df$y[wave_0_df$ID == id] else NULL
     
     betas <- switch(
-      scenario,
+      as.character(scenario),
       "1" = beta_scenario_1,
       "2" = beta_scenario_2,
       "3" = beta_scenario_3
@@ -209,7 +209,7 @@ simulate_data <- function(
       if(wave %in% c(2:tail(n_waves))) {
         
         # For use in scenario 2 and 3
-        y_prev <- panel_list[[row_index]]$y
+        y_prev <- if(scenario != 1) panel_list[[row_index]]$y else NULL
         
         # Get new probabilities from true beta values --------------------------
         probs <- get_probabilities(

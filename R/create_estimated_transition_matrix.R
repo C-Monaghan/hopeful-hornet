@@ -1,4 +1,3 @@
-#' @describeIn estimate_transition_matrices Uses external create_est_trans_matrix()
 create_estimated_transition_matrix <- function(model, data) {
   
   # Validations ----------------------------------------------------------------

@@ -31,8 +31,8 @@ get_probabilities <- function(x1, x2, x3, y_prev = NULL, betas, scenario) {
   # Scenario 2: Additive Markov Model -----------------------------------------
   else if (scenario == 2) {
     # Convert previous state to numeric indicators
-    prev_state_2 <- as.numericprev_state_2
-    prev_state_3 <- as.numericprev_state_3
+    prev_state_2 <- as.numeric(y_prev == 2)
+    prev_state_3 <- as.numeric(y_prev == 3)
     
     # Linear predictor for state 2 (vs reference state 1)
     lp1 <- betas$alpha[1] + 
@@ -55,8 +55,8 @@ get_probabilities <- function(x1, x2, x3, y_prev = NULL, betas, scenario) {
   else if (scenario == 3) {
     
     # Convert previous state to numeric indicators
-    prev_state_2 <- as.numericprev_state_2
-    prev_state_3 <- as.numericprev_state_3
+    prev_state_2 <- as.numeric(y_prev == 2)
+    prev_state_3 <- as.numeric(y_prev == 3)
     
     # Linear predictor for state 2 with interaction terms
     lp1 <- betas$alpha[1] + 
