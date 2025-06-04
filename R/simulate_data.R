@@ -42,6 +42,8 @@ simulate_data <- function(
   
   message("Running validations ... ")
   
+  Sys.sleep(time = 1)
+  
   # Validation -----------------------------------------------------------------
   scenario <- match.arg(as.character(scenario), choices = 1:3)
   stopifnot(
@@ -52,7 +54,9 @@ simulate_data <- function(
   )
   
   # Set seed for reproducibility -----------------------------------------------
-  if(!is.null(seed)) set.seed(seed); message("Radom seed set to :", seed)
+  if(!is.null(seed)) set.seed(seed); message("Radom seed set to: ", seed)
+  
+  Sys.sleep(time = 1)
   
   # True Parameter Values -----------------------------------------------------
   # Coefficients for three simulation scenarios (derived from empirical studies)
@@ -88,6 +92,8 @@ simulate_data <- function(
   )
   
   message("Generating subject level data ... ")
+  
+  Sys.sleep(time = 1)
   
   # Baseline Subject Characteristics ------------------------------------------
   # Generate time-invariant and initial time-varying covariates
@@ -235,6 +241,8 @@ simulate_data <- function(
   close(pb)
   
   message("Running final processing ...")
+  
+  Sys.sleep(time = 1)
   
   # Combine results into data.frame
   panel_data <- data.table::rbindlist(panel_list) |> as.data.frame()
