@@ -1,7 +1,8 @@
 get_probabilities <- function(x1, x2, x3, y_prev = NULL, betas, scenario) {
+  
   # Validation -----------------------------------------------------------------
-  if (!scenario %in% 1:3) {
-    stop("Scenario must be 1, 2, or 3")
+  if (!scenario %in% 1:4) {
+    stop("Scenario must be 1, 2, 3, or 4")
   }
   
   if (scenario == 1 && !is.null(y_prev)) {
@@ -15,17 +16,16 @@ get_probabilities <- function(x1, x2, x3, y_prev = NULL, betas, scenario) {
   # Scenario 1: Basic Model (No Markov Dependence) ----------------------------
   if(scenario == 1){
     # Linear predictor for state 2 (vs reference state 1)
-    lp1 <- betas$alpha[1] + 
+    eta2 <- betas$alpha[1] + 
       betas$beta_1[1]*x1 + 
       betas$beta_2[1]*x2 + 
       betas$beta_3[1]*x3
     
     # Linear predictor for state 3 (vs reference state 1)
-    lp2 <- betas$alpha[2] + 
+    eta3 <- betas$alpha[2] + 
       betas$beta_1[2]*x1 + 
       betas$beta_2[2]*x2 + 
       betas$beta_3[2]*x3
-    
   } 
   
   # Scenario 2: Additive Markov Model -----------------------------------------
@@ -35,7 +35,7 @@ get_probabilities <- function(x1, x2, x3, y_prev = NULL, betas, scenario) {
     prev_state_3 <- as.numeric(y_prev == 3)
     
     # Linear predictor for state 2 (vs reference state 1)
-    lp1 <- betas$alpha[1] + 
+    eta2 <- betas$alpha[1] + 
       betas$beta_1[1]*x1 + 
       betas$beta_2[1]*x2 + 
       betas$beta_3[1]*x3 +
@@ -43,7 +43,7 @@ get_probabilities <- function(x1, x2, x3, y_prev = NULL, betas, scenario) {
       betas$beta_5[1]*prev_state_3
     
     # Linear predictor for state 3 (vs reference state 1)
-    lp2 <- betas$alpha[2] + 
+    eta3 <- betas$alpha[2] + 
       betas$beta_1[2]*x1 + 
       betas$beta_2[2]*x2 + 
       betas$beta_3[2]*x3 +
@@ -59,7 +59,7 @@ get_probabilities <- function(x1, x2, x3, y_prev = NULL, betas, scenario) {
     prev_state_3 <- as.numeric(y_prev == 3)
     
     # Linear predictor for state 2 with interaction terms
-    lp1 <- betas$alpha[1] + 
+    eta2 <- betas$alpha[1] + 
       betas$beta_1[1]*x1 +
       betas$beta_2[1]*x2 +
       betas$beta_3[1]*x3 + 
@@ -73,7 +73,7 @@ get_probabilities <- function(x1, x2, x3, y_prev = NULL, betas, scenario) {
       betas$beta_11[1]*x3*prev_state_3
     
     # Linear predictor for state 3 with interaction terms
-    lp2 <- betas$alpha[2] + 
+    eta3 <- betas$alpha[2] + 
       betas$beta_1[2]*x1 + 
       betas$beta_2[2]*x2 +
       betas$beta_3[2]*x3 + 
@@ -89,11 +89,11 @@ get_probabilities <- function(x1, x2, x3, y_prev = NULL, betas, scenario) {
   
   # Probability Calculation ---------------------------------------------------
   # Denominator for softmax function
-  denom <- 1 + exp(lp1) + exp(lp2)
+  denom <- 1 + exp(eta2) + exp(eta3)
   
   # Return probabilities for states 1 (reference), 2, and 3
   return(c(
     1/denom, 
-    exp(lp1)/denom, 
-    exp(lp2)/denom))
+    exp(eta2)/denom, 
+    exp(eta3)/denom))
 }
