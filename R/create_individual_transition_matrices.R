@@ -10,8 +10,8 @@ create_individual_transition_matrices <- function(data) {
   for(id in unique(data$ID)) {
     
     individual <- data |>
-      filter(ID == id) |>
-      arrange(w)
+      dplyr::filter(ID == id) |>
+      dplyr::arrange(w)
     
     individual_transitions <- list()
     
