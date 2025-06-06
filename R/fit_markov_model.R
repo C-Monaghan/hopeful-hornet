@@ -46,6 +46,9 @@ fit_markov_model <- function(
     n_cores = parallel::detectCores() - 1,
     seed = NULL) {
   
+  # Loading function for parallel workers to access
+  source(here::here("R/create_individual_transition_matrices.R"))
+  
   # Input validation -----------------------------------------------------------
   stopifnot(is.data.frame(data),
             all(c("ID", "y_prev", "y") %in% names(data)),
@@ -96,6 +99,7 @@ fit_markov_model <- function(
     ), .Names       = c("null_models", "red_1_models", "red_2_models", "true_models", "of_models")),
     
     obs_trans       = structure(vector("list", length(sample_sizes)), .Names = paste0("n_", sample_sizes)),
+    idv_trans       = structure(vector("list", length(sample_sizes)), .Names = paste0("n_", sample_sizes)),
     test_data       = test_data,
     meta_data  = list(
       sample_sizes  = sample_sizes,
@@ -108,7 +112,7 @@ fit_markov_model <- function(
   # Name the top-level components
   names(results) <- c(
     "base_models", "additive_models", "multiplicative_models",
-    "obs_trans", "test_data", "meta_data")
+    "obs_trans", "idv_trans",  "test_data", "meta_data")
   
   # Name the sample size elements for each model type
   size_names <- paste0("n_", sample_sizes)
@@ -119,7 +123,7 @@ fit_markov_model <- function(
     }
   }
   
-  names(results$obs_trans)   <- size_names
+  # names(results$obs_trans)   <- size_names
   
   # Model fitting worker function ----------------------------------------------
   # Centralized function to handle model fitting for both parallel and 
@@ -127,12 +131,15 @@ fit_markov_model <- function(
   fit_worker <- function(n) {
     replicate(n_reps, {
       # Sample subjects (not individual observations) to maintain data structure
-      sample_ids <- sample(unique_train_ids, size = n)
+      sample_ids  <- sample(unique_train_ids, size = n)
       sample_data <- train_data[train_data$ID %in% sample_ids, ]
       
       # Calculate empirical transition probabilities
       transitions <- table(From = sample_data$y_prev, To = sample_data$y)
-      obs_matrix <- round(prop.table(transitions, margin = 1), 2)
+      obs_matrix  <- round(prop.table(transitions, margin = 1), 2)
+      
+      # Create individual transition matrices for each subject
+      # idv_trans   = create_individual_transition_matrices(sample_data)
       
       # Fitting all 15 models
       list(
@@ -158,7 +165,10 @@ fit_markov_model <- function(
         mult_of    = nnet::multinom(y ~ (x1 + x2 + x3 + x4 + x5) * y_prev, data = sample_data, trace = FALSE),
         
         # Observed transition matrix
-        obs_matrix = obs_matrix
+        obs_matrix = obs_matrix,
+        
+        # Individual transitions
+        idv_trans  = create_individual_transition_matrices(sample_data)
       )
     }, simplify = FALSE)
   }
@@ -185,8 +195,8 @@ fit_markov_model <- function(
     
     # Export data to clusters
     parallel::clusterExport(
-      cl, 
-      varlist = c("train_data", "unique_train_ids"), 
+      cl,
+      varlist = c("train_data", "unique_train_ids", "create_individual_transition_matrices"), 
       envir = environment())
     
     # Set RNG seed for reproducible parallel execution
@@ -200,12 +210,15 @@ fit_markov_model <- function(
         reps = 1:n_reps, .packages = "nnet", .options.snow = opts) %dorng% {
           
           # Sample subjects (not individual observations) to maintain data structure
-          sample_ids <- sample(unique_train_ids, size = n)
+          sample_ids  <- sample(unique_train_ids, size = n)
           sample_data <- train_data[train_data$ID %in% sample_ids, ]
           
           # Calculate empirical transition probabilities
           transitions <- table(From = sample_data$y_prev, To = sample_data$y)
-          obs_matrix <- round(prop.table(transitions, margin = 1), 2)
+          obs_matrix  <- round(prop.table(transitions, margin = 1), 2)
+          
+          # Create individual transition matrices for each subject
+          # idv_trans   = create_individual_transition_matrices(sample_data)
           
           # Fit all models
           list(
@@ -230,7 +243,8 @@ fit_markov_model <- function(
             mult_true = nnet::multinom(y ~ (x1 + x2 + x3) * y_prev, data = sample_data, trace = FALSE),
             mult_of   = nnet::multinom(y ~ (x1 + x2 + x3 + x4 + x5) * y_prev, data = sample_data, trace = FALSE),
             
-            obs_matrix = obs_matrix
+            obs_matrix = obs_matrix,
+            idv_trans  = create_individual_transition_matrices(sample_data)
           )
         } # End of %dopar%
       
@@ -254,8 +268,10 @@ fit_markov_model <- function(
       results$multiplicative_models$of_models[[i]]    <- lapply(rep_results, `[[`, "mult_of")
       
       results$obs_trans[[i]]                          <- lapply(rep_results, `[[`, "obs_matrix")
+      results$idv_trans[[i]]                          <- lapply(rep_results, `[[`, "idv_trans")
     } # End of for(i in seq_along(sample_sizes))
     
+    # closeAllConnections()
     parallel::stopCluster(cl)
     
   } else {
@@ -288,6 +304,7 @@ fit_markov_model <- function(
       results$multiplicative_models$of_models[[i]]    <- lapply(rep_results, `[[`, "mult_of")
       
       results$obs_trans[[i]]                          <- lapply(rep_results, `[[`, "obs_matrix")
+      results$idv_trans[[i]]                          <- lapply(rep_results, `[[`, "idv_trans")
     } # End of for (i in seq_along(sample_sizes))
   }
   
