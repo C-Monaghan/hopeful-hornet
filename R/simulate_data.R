@@ -37,29 +37,35 @@
 simulate_data <- function(
     n_subjects = 100,                 # Number of individuals
     n_waves = 3,                      # Number of waves
-    scenario = 1:3,                   # What simulation scenario to run
+    scenario = 1:4,                   # What simulation scenario to run
+    betas = NULL,                     # For scenario 4: either a list-of-coefs or list-of-multinom-objects
     seed = NULL) {                    # Seed (for reproducibility)
   
   message("Running validations ... ")
   
   Sys.sleep(time = 1)
   
-  # Validation -----------------------------------------------------------------
-  scenario <- match.arg(as.character(scenario), choices = 1:3)
+  # ── 1) VALIDATION ───────────────────────────────────────────────────────────
+  scenario <- match.arg(as.character(scenario), choices = 1:4)
   stopifnot(
     is.numeric(n_subjects) && n_subjects > 0,
     is.numeric(n_waves) && n_waves > 0,
-    scenario %in% 1:3,
+    scenario %in% 1:4,
     is.null(seed) || is.numeric(seed)
   )
   
-  # Set seed for reproducibility -----------------------------------------------
+  # If scenario 4 but no betas supplied, throw an error:
+  if (scenario == 4 && is.null(betas)) {
+    stop("`scenario = 4` requires you to pass a non‐NULL `betas` argument.")
+  }
+  
+  # ── 2) SET SEED ───────────────────────────────────────────────────────────── 
   if(!is.null(seed)) set.seed(seed); message("Radom seed set to: ", seed)
   
   Sys.sleep(time = 1)
   
-  # True Parameter Values -----------------------------------------------------
-  # Coefficients for three simulation scenarios (derived from empirical studies)
+  # ── 3) TRUE PARAMETER VALUES FOR SCENARIOS 1–3 ──────────────────────────────
+  # Derived from empirical studies
   beta_scenario_1 <- list(
     alpha  = c(-5.152, -5.402), # Intercepts for y = 2 and y = 3
     beta_1 = c(0.008, -0.034),  # x1 effects
@@ -91,11 +97,16 @@ simulate_data <- function(
     beta_11 = c(-0.082, -0.021)  # x3 * y_prev = 3 effects
   )
   
+  # SCENARIO 4: getting coefficients from fitted object
+  if (scenario == "4") { 
+    beta_scenario_4 <- betas
+  }
+  
   message("Generating subject level data ... ")
   
   Sys.sleep(time = 1)
   
-  # Baseline Subject Characteristics ------------------------------------------
+  # ── 4) BASELINE SUBJECT CHARACTERISTICS ────────────────────────────────────
   # Generate time-invariant and initial time-varying covariates
   subject_data <- data.frame(
     ID = 1:n_subjects,
@@ -113,7 +124,7 @@ simulate_data <- function(
     x5 = round(runif(n = n_subjects, min = 0, max = 1), digits = 2)
   )
   
-  # Wave 0 Simulation (for Markov Scenarios) ----------------------------------
+  # ── 5) WAVE 0 SIMULATION (FOR MARKOV SCENARIOS 2–4) ─────────────────────────
   if(scenario != 1) {
     
     message("Generating wave 0 dataframe for Markov scenario: ", scenario, " ...")
@@ -140,7 +151,7 @@ simulate_data <- function(
     wave_0_df <- bind_rows(wave_0)
   }
   
-  # Main Simulation Setup -----------------------------------------------------
+  # ── 6) MAIN SIMULATION SETUP ────────────────────────────────────────────────  
   total_rows <- n_subjects * n_waves
   panel_list <- vector("list", total_rows)
   pi_values <- vector("list", total_rows)
@@ -166,10 +177,11 @@ simulate_data <- function(
       as.character(scenario),
       "1" = beta_scenario_1,
       "2" = beta_scenario_2,
-      "3" = beta_scenario_3
+      "3" = beta_scenario_3,
+      "4" = beta_scenario_4
       )
     
-    # Initial State Probabilities
+    # ── 6.1) INITIAL STATE (wave = 1) ─────────────────────────────────────────
     probs <- get_probabilities(
       x1 = subj$x1, x2 = subj$x2, x3 = subj$x3,
       y_prev = y_prev, betas = betas, scenario = scenario)
@@ -181,6 +193,7 @@ simulate_data <- function(
     draw_init <- rmultinom(n = 1, size = 1, prob = probs)
     y <- factor(which(draw_init == 1), levels = 1:3)
 
+    # ── 6.2) LOOP OVER WAVES 1..n_waves ──────────────────────────────────────
     # 🎶 I love them double for loops baby 🎶
     for(wave in 1:n_waves) {
       
@@ -211,7 +224,7 @@ simulate_data <- function(
         x5 = x5
       )
       
-      # Update transition probabilities for next wave (Markov scenarios)
+      # ── 6.3) UPDATE FOR NEXT WAVE (IF ANY) ─────────────────────────────────
       if(wave %in% c(2:tail(n_waves))) {
         
         # For use in scenario 2 and 3
@@ -237,7 +250,7 @@ simulate_data <- function(
     } # End of for(wave in 1:n_waves)
   } # End of for(id in 1:n_subjects)
   
-  # Final Processing ----------------------------------------------------------
+  # ── 7) FINAL PROCESSING ─────────────────────────────────────────────────────  
   close(pb)
   
   message("Running final processing ...")
@@ -256,7 +269,8 @@ simulate_data <- function(
   pi_matrix <- do.call(rbind, pi_values)
   colnames(pi_matrix) <- c("pi_1", "pi_2", "pi_3")
   
-  pi_df <- cbind(panel_data[, c("ID", "w")], pi_matrix)
+  pi_df <- cbind(panel_data[, c("ID", "w")], pi_matrix) |>
+    as_tibble()
   
   # Returning data
   return(list(
