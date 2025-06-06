@@ -15,6 +15,7 @@ sapply(functions, source)
 # Simulating data with default parameters --------------------------------------
 simulation <- simulate_data(n_subjects = 10000, scenario = 1, seed = 123)
 
+# Adding previous states
 data <- simulation$data |>
   add_previous_status()
 
@@ -22,9 +23,95 @@ data <- simulation$data |>
 models <- fit_markov_model(
   data = data, 
   sample_sizes = c(100, 250, 1000), 
-  n_reps = 200,
+  n_reps = 1,
   parallel = FALSE,
   seed = 125)
+
+# Storing fitted models coefficients in a list ---------------------------------
+# Base models
+base_coefs <- imap(models$base_models, function(model, type) {
+  imap(model, function(sub_model, size) {
+    imap(sub_model, function(fit, index) {
+      extract_betas(fit)
+    })
+  })
+})
+
+# Additive models
+additive_coefs <- imap(models$additive_models, function(model, type) {
+  imap(model, function(sub_model, size) {
+    imap(sub_model, function(fit, index) {
+      extract_betas(fit)
+    })
+  })
+})
+
+# Multiplicative models
+mult_coefs <- imap(models$multiplicative_models, function(model, type) {
+  imap(model, function(sub_model, size) {
+    imap(sub_model, function(fit, index) {
+      extract_betas(fit)
+    })
+  })
+})
+
+# Store all coefficients together
+all_coefs <- list(
+  base_models           = base_coefs,
+  additive_models       = additive_coefs,
+  multiplicative_models = mult_coefs
+)
+
+# Resimulating data from fitted coefficients -----------------------------------
+resimulation <- imap(all_coefs, function(sub_block, parent) {
+  # Parent is named
+  #   - base_models           = 1
+  #   - additive_models       = 2
+  #   - multiplicative_models = 3
+  scenario_num <- get_scenario_number(parent_block_name = parent)
+  
+  imap(sub_block, function(size, block) {
+    # sub_block is named
+    #   - null_models, 
+    #   - red_1_models, 
+    #   - red_2_models, 
+    #   - true_models, 
+    #   - of_models
+    imap(size, function(beta_list, size_label) {
+      # size_label is named
+      #   - n_100, 
+      #   - n_250, 
+      #   - n_1000
+      
+      n_subjects <- stringr::str_remove(size_label, "n_") |> as.numeric()
+      
+      imap(beta_list, function(betas, index) {
+        # Index is just the fitted simulation number
+        
+        # Resimulating data
+        resim_data <- simulate_data(
+          n_subjects = n_subjects,
+          n_waves = 3,
+          scenario = 4,
+          betas = betas,
+          seed = 123
+        )
+        
+        # Tidying up data
+        resim_data$data |>
+          mutate(
+            sample_size = n_subjects,
+            parent = parent,
+            sub_block = block,
+            rep = index
+          ) |>
+          add_previous_status()
+      })
+    })
+  })
+})
+
+
 
 # Estimated transition matrices
 estimate_matrices <- estimate_transition_matrices(models, models$test_data)
