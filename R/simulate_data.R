@@ -37,32 +37,37 @@
 simulate_data <- function(
     n_subjects = 100,                 # Number of individuals
     n_waves = 3,                      # Number of waves
-    scenario = 1:4,                   # What simulation scenario to run
+    scenario = 1:3,                   # What simulation scenario to run
+    resim = FALSE,                    # Is this a resimulation
     betas = NULL,                     # For scenario 4: either a list-of-coefs or list-of-multinom-objects
-    seed = NULL) {                    # Seed (for reproducibility)
+    seed = NULL,                      # Seed (for reproducibility)
+    verbose = FALSE) {                # Should messages appear         
   
-  message("Running validations ... ")
+  if(verbose) message("Running validations ... ")
   
-  Sys.sleep(time = 1)
+  if(verbose) Sys.sleep(time = 1)
   
   # ── 1) VALIDATION ───────────────────────────────────────────────────────────
-  scenario <- match.arg(as.character(scenario), choices = 1:4)
+  scenario <- match.arg(as.character(scenario), choices = 1:3)
   stopifnot(
     is.numeric(n_subjects) && n_subjects > 0,
     is.numeric(n_waves) && n_waves > 0,
-    scenario %in% 1:4,
+    scenario %in% 1:3,
     is.null(seed) || is.numeric(seed)
   )
   
   # If scenario 4 but no betas supplied, throw an error:
-  if (scenario == 4 && is.null(betas)) {
-    stop("`scenario = 4` requires you to pass a non‐NULL `betas` argument.")
+  if (resim == TRUE && is.null(betas)) {
+    stop("`resum = TRUE` requires you to pass a non‐NULL `betas` argument.")
   }
   
   # ── 2) SET SEED ───────────────────────────────────────────────────────────── 
-  if(!is.null(seed)) set.seed(seed); message("Radom seed set to: ", seed)
+  if(!is.null(seed)) {
+    set.seed(seed)
+    if(verbose) message("Random seed set to: ", seed)
+  }
   
-  Sys.sleep(time = 1)
+  if(verbose) Sys.sleep(time = 1)
   
   # ── 3) TRUE PARAMETER VALUES FOR SCENARIOS 1–3 ──────────────────────────────
   # Derived from empirical studies
@@ -98,13 +103,13 @@ simulate_data <- function(
   )
   
   # SCENARIO 4: getting coefficients from fitted object
-  if (scenario == "4") { 
+  if (resim == TRUE) { 
     beta_scenario_4 <- betas
   }
   
-  message("Generating subject level data ... ")
+  if(verbose) message("Generating subject level data ... ")
   
-  Sys.sleep(time = 1)
+  if(verbose) Sys.sleep(time = 1)
   
   # ── 4) BASELINE SUBJECT CHARACTERISTICS ────────────────────────────────────
   # Generate time-invariant and initial time-varying covariates
@@ -127,7 +132,7 @@ simulate_data <- function(
   # ── 5) WAVE 0 SIMULATION (FOR MARKOV SCENARIOS 2–4) ─────────────────────────
   if(scenario != 1) {
     
-    message("Generating wave 0 dataframe for Markov scenario: ", scenario, " ...")
+    if(verbose) message("Generating wave 0 dataframe for Markov scenario: ", scenario, " ...")
     
     wave_0 <- vector("list", n_subjects)
     
@@ -158,14 +163,16 @@ simulate_data <- function(
   row_index  <- 1
   
   # Progress tracking
-  message("Simulating ", n_waves, " waves for ", n_subjects, " subjects...")
-  pb <- utils::txtProgressBar(min = 0, max = n_subjects, style = 3)
+  if(verbose) {
+    message("Simulating ", n_waves, " waves for ", n_subjects, " subjects...")
+    pb <- utils::txtProgressBar(min = 0, max = n_subjects, style = 3)
+  }
   
   # Longitudinal Data Simulation ----------------------------------------------
   for(id in 1:n_subjects) {
     
     # Start progress
-    utils::setTxtProgressBar(pb, id)
+    if(verbose) utils::setTxtProgressBar(pb, id)
     
     # Get individual level subject data
     subj <- subject_data[id, ]
@@ -173,13 +180,17 @@ simulate_data <- function(
     # Getting scenario specific data (previous y and beta values)
     y_prev <- if(scenario != 1) wave_0_df$y[wave_0_df$ID == id] else NULL
     
-    betas <- switch(
-      as.character(scenario),
-      "1" = beta_scenario_1,
-      "2" = beta_scenario_2,
-      "3" = beta_scenario_3,
-      "4" = beta_scenario_4
-      )
+    # What beta values to use
+    if(resim == TRUE) {
+      betas <- beta_scenario_4
+    } else {
+      betas <- switch(
+        as.character(scenario),
+        "1" = beta_scenario_1,
+        "2" = beta_scenario_2,
+        "3" = beta_scenario_3
+      ) 
+    }
     
     # ── 6.1) INITIAL STATE (wave = 1) ─────────────────────────────────────────
     probs <- get_probabilities(
@@ -251,11 +262,11 @@ simulate_data <- function(
   } # End of for(id in 1:n_subjects)
   
   # ── 7) FINAL PROCESSING ─────────────────────────────────────────────────────  
-  close(pb)
+  if(verbose) close(pb)
   
-  message("Running final processing ...")
+  if(verbose) message("Running final processing ...")
   
-  Sys.sleep(time = 1)
+  if(verbose) Sys.sleep(time = 1)
   
   # Combine results into data.frame
   panel_data <- data.table::rbindlist(panel_list) |> as.data.frame()
