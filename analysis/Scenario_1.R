@@ -4,123 +4,237 @@
 
 rm(list = ls()) # To annoy Rafael
 
-library(dplyr)
-library(ggplot2)
+# 1. Loading packages ----------------------------------------------------------
+pacman::p_load(
+  dplyr,
+  purrr,
+  furrr,
+  progressr,
+  ggplot2
+)
 
-# Loading simulation functions -------------------------------------------------
-functions <- list.files(path = here::here("R/"), full.names = TRUE)
+# 2. Parallel back-end ----------------------------------------------------------
+plan(multisession, workers = parallel::detectCores() - 1)
 
-sapply(functions, source)
+handlers("txtprogressbar")
 
-# Simulating data with default parameters --------------------------------------
-simulation <- simulate_data(n_subjects = 10000, scenario = 1, seed = 123)
+# 3. Simulation functions ------------------------------------------------------
+func_files <- list.files(path = here::here("R/"), 
+                         pattern = "\\.R$", 
+                         full.names = TRUE)
+
+walk(func_files, source)
+
+# 4. Simulating "true" data ----------------------------------------------------
+sim <- simulate_data(
+  n_subjects = 10000, n_waves = 3, scenario = 1, 
+  resim = FALSE, betas = NULL, seed = 123, verbose = TRUE)
 
 # Adding previous states
-data <- simulation$data |>
+data <- sim$data |>
   add_previous_status()
 
-# Simulate good and bad markov models ------------------------------------------
+# 5) Fit base, additive, multiplicative models ---------------------------------
 models <- fit_markov_model(
   data = data, 
   sample_sizes = c(100, 250, 1000), 
-  n_reps = 1,
+  n_reps = 250,
   parallel = FALSE,
   seed = 125)
 
-# Storing fitted models coefficients in a list ---------------------------------
-# Base models
-base_coefs <- imap(models$base_models, function(model, type) {
-  imap(model, function(sub_model, size) {
-    imap(sub_model, function(fit, index) {
-      extract_betas(fit)
+# 6) Extract β‑lists -----------------------------------------------------------
+message("Extracting β values ... ")
+
+model_fits <- models[c("base_models", "additive_models", "multiplicative_models")]
+
+model_coefs <- imap(model_fits, function(by_sub_blocks, parent) {
+  imap(by_sub_blocks, function(by_sizes, sub_blocks) {
+    imap(by_sizes, function(by_fit_list, size_labels) {
+      map(by_fit_list, extract_betas)
     })
   })
 })
 
-# Additive models
-additive_coefs <- imap(models$additive_models, function(model, type) {
-  imap(model, function(sub_model, size) {
-    imap(sub_model, function(fit, index) {
-      extract_betas(fit)
-    })
-  })
-})
+# 7) Resimulate from each β‑list in parallel -----------------------------------
+message("Resimulating data ... ")
 
-# Multiplicative models
-mult_coefs <- imap(models$multiplicative_models, function(model, type) {
-  imap(model, function(sub_model, size) {
-    imap(sub_model, function(fit, index) {
-      extract_betas(fit)
-    })
-  })
-})
+num_tasks <- model_coefs |> listr::list_flatten(max_depth = 2) |> length()
 
-# Store all coefficients together
-all_coefs <- list(
-  base_models           = base_coefs,
-  additive_models       = additive_coefs,
-  multiplicative_models = mult_coefs
-)
-
-# Resimulating data from fitted coefficients -----------------------------------
-resimulation <- imap(all_coefs, function(sub_block, parent) {
-  # Parent is named
-  #   - base_models           = 1
-  #   - additive_models       = 2
-  #   - multiplicative_models = 3
-  scenario_num <- get_scenario_number(parent_block_name = parent)
+resimulation <- with_progress({
+  p <- progressor(steps = num_tasks)
   
-  imap(sub_block, function(size, block) {
-    # sub_block is named
-    #   - null_models, 
-    #   - red_1_models, 
-    #   - red_2_models, 
-    #   - true_models, 
-    #   - of_models
-    imap(size, function(beta_list, size_label) {
-      # size_label is named
-      #   - n_100, 
-      #   - n_250, 
-      #   - n_1000
-      
-      n_subjects <- stringr::str_remove(size_label, "n_") |> as.numeric()
-      
-      imap(beta_list, function(betas, index) {
-        # Index is just the fitted simulation number
-        
-        # Resimulating data
-        resim_data <- simulate_data(
-          n_subjects = n_subjects,
-          n_waves = 3,
-          scenario = 4,
-          betas = betas,
-          seed = 123
-        )
-        
-        # Tidying up data
-        resim_data$data |>
-          mutate(
-            sample_size = n_subjects,
-            parent = parent,
-            sub_block = block,
-            rep = index
-          ) |>
-          add_previous_status()
+  future_imap(model_coefs, function(by_sub_block, parent) {
+    # Parent is named
+    #   - base_models           = 1
+    #   - additive_models       = 2
+    #   - multiplicative_models = 3
+    future_imap(by_sub_block, function(by_size, sub_block) {
+      # sub_block is named
+      #   - null_models,
+      #   - red_1_models,
+      #   - red_2_models,
+      #   - true_models,
+      #   - of_models
+      future_imap(by_size, function(by_beta_lists, size) {
+        # size_label is named
+        #   - n_100,
+        #   - n_250,
+        #   - n_1000
+        future_map2(by_beta_lists, seq_along(by_beta_lists), function(betas, reps) {
+          
+          p()
+          
+          resim_data <- simulate_data(
+            n_subjects = 10000, n_waves = 3, scenario = 1, 
+            resim = TRUE, betas = betas, seed = 123, verbose = FALSE
+          )
+          
+          resim_data$data |>
+            mutate(
+              parent_block = parent,
+              sub_block = sub_block,
+              size_label = size,
+              rep = as.character(reps)
+            ) |>
+            add_previous_status()
+        }, .options = furrr_options(seed = TRUE))
       })
     })
   })
 })
 
-# Creating individual transition matrix for each simulated dataset
-indiv_transitions <- imap(resimulation, function(sub_block, parent) {
-  imap(sub_block, function(size, block) {
-    imap(size, function(data_list, size_label) {
-      imap(data_list, function(data, index) {
-        create_individual_transition_matrices(data)
-      })
-    })
+# 8) Extract PIDs into a single tibble -----------------------------------------
+pids_df <- imap(models$idv_trans, function(by_reps, size_label) {
+  imap(by_reps, function(by_pid_list, rep) {
+    tibble(
+      ID         = as.numeric(stringr::str_remove(names(by_pid_list), "^p_")),
+      size_label = size_label,
+      rep        = as.character(rep)
+    )
   })
+}) |> list_flatten() |> bind_rows()
+
+# 9) Compute individual transition matrices, filtered by PIDs ------------------
+message("Computing individual transitions ... ")
+
+num_tasks <- resimulation |> listr::list_flatten(max_depth = 3) |> length()
+
+indiv_transitions <- with_progress({
+  p <- progressor(steps = num_tasks)
+  
+  future_imap(resimulation, function(by_sub_blocks, parent) {
+    future_imap(by_sub_blocks, function(by_sizes, sub_block) {
+      future_imap(by_sizes, function(by_data_list, size_label) {
+        future_map(by_data_list, function(df) {
+          
+          p()
+          
+          df |>
+            semi_join(pids_df, by = c("ID", "size_label", "rep")) |>
+            create_individual_transition_matrices()
+        }) # end of by_data_list
+      }) # End of by_sizes
+    }) # End of by_sub_blocks
+  }) # End of resimulation
 })
+
+# 10. Compute matrix‐distance metrics ------------------------------------------
+# Flatten all transitons into one tibble
+message("Computing matrix distances (step 1) ... ")
+
+transition_tibble <- imap_dfr(indiv_transitions, function(by_sub_model, parent) {
+  imap_dfr(by_sub_model, function(by_size, sub_model) {
+    imap_dfr(by_size, function(reps, size_label) {
+      imap_dfr(reps, function(sim_list, rep_index) {
+        obs_list <- models$idv_trans[[size_label]][[rep_index]]
+        
+        # for each PID and wave, extract sim and obs matrices
+        imap_dfr(sim_list, function(sim_pid_list, pid) {
+          common_waves <- intersect(names(sim_pid_list), names(obs_list[[pid]]))
+          tibble(
+            parent_block = parent,
+            sub_model    = sub_model,
+            size_label   = size_label,
+            rep          = rep_index,
+            ID           = stringr::str_remove(pid, "^p_"),
+            wave         = common_waves,
+            sim_mat      = sim_pid_list[common_waves] |> map(as.matrix),
+            obs_mat      = obs_list[[pid]][common_waves] |> map(as.matrix)
+          )
+        }) # End of sim_list
+      }) # End of reps
+    }) # End of by_size
+  }) # End of by_sub_model
+})
+
+message("Computing matrix distances (step 2) ... ")
+
+num_tasks <- nrow(transition_tibble)
+
+# 10.1. Comparing matrices
+matrix_distances <- with_progress({
+  p <- progressor(steps = num_tasks)
+  
+  transition_tibble |>
+    mutate(
+      results = future_pmap(list(obs_mat, sim_mat), function(obs_mat, sim_mat) {
+        p()
+        
+        compare_matrices(obs_mat = obs_mat, sim_mat = sim_mat)
+      }, .options = furrr_options(seed = TRUE))
+    ) |>
+    tidyr::unnest(results)
+})
+
+# 11. Exporting ----------------------------------------------------------------
+message("Saving results ... ")
+
+saveRDS(
+  object = matrix_distances, 
+  file = here::here("analysis/results/matrix_distances.RDS"))
+
+# transition_difference <- purrr::imap(indiv_transitions, function(by_sub_model, parent) {
+#   # by_sub_model = indiv_transitions[[parent]] 
+#   purrr::imap(by_sub_model, function(by_size, sub_model) {
+#     # by_size = indiv_transitions[[parent]][[sub_model]]
+#     purrr::imap(by_size, function(by_rep_list, size) {
+#       # by_rep_list = indiv_transitions[[parent]][[sub_model]][[size]]
+#       # and obs[[size]] is the observed list-of-reps per sample size
+#       obs_reps <- obs[[size]]
+#       
+#       purrr::map2(by_rep_list, obs_reps, function(sim_list, obs_list) {
+#         common_pids <- intersect(names(sim_list), names(obs_list))
+#         
+#         # For each PID, subtract sub‐matrices:
+#         # pid$w_1_2
+#         # pid$w_2_3
+#         pid_diffs <- purrr::map(common_pids, function(pid){
+#           sim_pid_list <- sim_list[[pid]]
+#           obs_pid_list <- obs_list[[pid]]
+#           
+#           common_wave <- intersect(names(sim_pid_list), names(obs_pid_list))
+#           
+#           # Finally, we can subtract the sub matrices
+#           wave_diffs <- purrr::map(common_wave, function(wave) {
+#             sim_mat <- as.matrix(sim_pid_list[[wave]])
+#             obs_mat <- as.matrix(obs_pid_list[[wave]])
+#             
+#             # Simulated - Observed
+#             sim_mat - obs_mat
+#           })
+#           
+#           # Naming the waves
+#           names(wave_diffs) <- common_wave
+#           wave_diffs
+#         })
+#         
+#         # Naming the pids
+#         names(pid_diffs) <- common_pids
+#         pid_diffs
+#       })
+#     })
+#   })
+# })
 
 # # Estimated transition matrices
 # estimate_matrices <- estimate_transition_matrices(models, models$test_data)
