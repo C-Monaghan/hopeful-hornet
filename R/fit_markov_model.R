@@ -65,12 +65,12 @@ fit_markov_model <- function(
   # Split data into training (80%) and test (20%) sets while keeping all 
   # observations for each subject together
   ids        <- unique(data$ID)
-  test_id    <- sample(ids, size = round(0.2 * length(ids)))
-  
-  test_data  <- data[data$ID %in% test_id, ]
-  train_data <- data[!data$ID %in% test_id, ]
-  
-  unique_train_ids <- unique(train_data$ID)
+  # test_id    <- sample(ids, size = round(0.2 * length(ids)))
+  # 
+  # test_data  <- data[data$ID %in% test_id, ]
+  # train_data <- data[!data$ID %in% test_id, ]
+  # 
+  # unique_train_ids <- unique(train_data$ID)
   
   # Pre-allocate lists for storing results with meaningful names ---------------
   results <- list(
@@ -100,19 +100,16 @@ fit_markov_model <- function(
     
     obs_trans       = structure(vector("list", length(sample_sizes)), .Names = paste0("n_", sample_sizes)),
     idv_trans       = structure(vector("list", length(sample_sizes)), .Names = paste0("n_", sample_sizes)),
-    test_data       = test_data,
     meta_data  = list(
       sample_sizes  = sample_sizes,
-      n_reps        = n_reps,
-      train_size    = length(unique_train_ids),
-      test_size     = length(test_id)
+      n_reps        = n_reps
     )
   )
   
   # Name the top-level components
   names(results) <- c(
     "base_models", "additive_models", "multiplicative_models",
-    "obs_trans", "idv_trans",  "test_data", "meta_data")
+    "obs_trans", "idv_trans", "meta_data")
   
   # Name the sample size elements for each model type
   size_names <- paste0("n_", sample_sizes)
@@ -131,15 +128,12 @@ fit_markov_model <- function(
   fit_worker <- function(n) {
     replicate(n_reps, {
       # Sample subjects (not individual observations) to maintain data structure
-      sample_ids  <- sample(unique_train_ids, size = n)
-      sample_data <- train_data[train_data$ID %in% sample_ids, ]
+      sample_ids  <- sample(ids, size = n)
+      sample_data <- data[data$ID %in% sample_ids, ]
       
       # Calculate empirical transition probabilities
       transitions <- table(From = sample_data$y_prev, To = sample_data$y)
       obs_matrix  <- round(prop.table(transitions, margin = 1), 2)
-      
-      # Create individual transition matrices for each subject
-      # idv_trans   = create_individual_transition_matrices(sample_data)
       
       # Fitting all 15 models
       list(
@@ -196,7 +190,7 @@ fit_markov_model <- function(
     # Export data to clusters
     parallel::clusterExport(
       cl,
-      varlist = c("train_data", "unique_train_ids", "create_individual_transition_matrices"), 
+      varlist = c("data", "ids", "create_individual_transition_matrices"), 
       envir = environment())
     
     # Set RNG seed for reproducible parallel execution
@@ -210,8 +204,8 @@ fit_markov_model <- function(
         reps = 1:n_reps, .packages = "nnet", .options.snow = opts) %dorng% {
           
           # Sample subjects (not individual observations) to maintain data structure
-          sample_ids  <- sample(unique_train_ids, size = n)
-          sample_data <- train_data[train_data$ID %in% sample_ids, ]
+          sample_ids  <- sample(ids, size = n)
+          sample_data <- data[data$ID %in% sample_ids, ]
           
           # Calculate empirical transition probabilities
           transitions <- table(From = sample_data$y_prev, To = sample_data$y)
@@ -314,8 +308,6 @@ fit_markov_model <- function(
   results$meta_data$seed_used <- seed
   
   message("\nModel fitting completed successfully")
-  message("Training samples used: ", length(unique_train_ids))
-  message("Test samples held out: ", length(test_id))
   
   return(results)
 }
