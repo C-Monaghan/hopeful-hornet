@@ -29,16 +29,35 @@ distances[, ":=" (obs_mat = NULL, sim_mat = NULL)]
 dist_sum <- distances[, .(value = mean(value)), by = .(parent_block, sub_model, size_label, rep, wave, metric)] |>
   tibble::as_tibble()
 
+# Highlighting the "true model"
+dist_sum <- dist_sum |>
+  mutate(
+    fill = case_when(
+      parent_block == "Base Models" & sub_model == "True Model" ~ "True",
+      parent_block == "Base Models" ~ "Base Models",
+      parent_block == "Additive Models" ~ "Additive Models",
+      parent_block == "Multiplicative Models" ~  "Multiplicative Models"
+    ),
+    fill = factor(
+      fill, 
+      levels = c("Base Models", "True", "Additive Models", "Multiplicative Models"))
+  )
+
 # Plotting ---------------------------------------------------------------------
 dis_plot <- dist_sum |>
-  ggplot(aes(x = log(value), y = sub_model, fill = parent_block)) +
+  ggplot(aes(x = log(value), y = sub_model, fill = fill)) +
   geom_boxplot(
     position = ggstance::position_dodgev(height = 0.95, preserve = "single"),
     outlier.size = 1) +
-  ggokabeito::scale_fill_okabe_ito(alpha = 0.85) +
+  scale_fill_manual(
+    values = c(
+      "Base Models" = "#E69F00", "True" = "#8b1a1a",
+      "Additive Models" = "#56B4E9", "Multiplicative Models" = "#009E73"),
+    breaks = c("Base Models", "Additive Models", "Multiplicative Models")) +
+  # ggokabeito::scale_fill_okabe_ito(alpha = 0.85) +
   labs(
     title =  "Distance Metrics by Sub‑Model and Parent Block",
-    subtitle = "True Distribution is: Base Models (True Model)",
+    subtitle = "True Model from Base Models (highlighted in red)",
     x     =  "Log(distance)",
     y     =  NULL,
     fill  =  NULL
@@ -58,6 +77,8 @@ dis_plot <- dist_sum |>
     legend.background    = element_rect(fill = "transparent"),
     legend.key           = element_blank()
   )
+
+dis_plot
 
 # Saving -----------------------------------------------------------------------
 cowplot::save_plot(
