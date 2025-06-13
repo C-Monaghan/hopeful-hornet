@@ -1,5 +1,5 @@
-# Simulation Scenario 1 
-# Assuming no previous response effect
+# Simulation Scenario 2
+# Assuming an additive previous response effect
 # ------------------------------------------------------------------------------
 
 rm(list = ls()) # To annoy Rafael
@@ -26,7 +26,7 @@ walk(func_files, source)
 
 # 4. Simulating "true" data ----------------------------------------------------
 sim <- simulate_data(
-  n_subjects = 2000, n_waves = 3, scenario = 1, 
+  n_subjects = 2000, n_waves = 3, scenario = 2, 
   resim = FALSE, betas = NULL, seed = 123, verbose = TRUE)
 
 # Adding previous states
@@ -37,7 +37,7 @@ models <- fit_markov_model(
   data         = data, 
   sample_sizes = c(100, 250, 1000), 
   n_reps       = 200,
-  parallel     = TRUE,
+  parallel     = FALSE,
   seed         = 125)
 
 # 6) Extract β‑lists -----------------------------------------------------------
@@ -93,19 +93,22 @@ resimulation <- with_progress({
           
           p()
           
-          resim_data <- simulate_data(
-            n_subjects = 2000, n_waves = 3, scenario = 1, 
-            resim = TRUE, betas = betas, seed = 123, verbose = FALSE
-          )
-          
-          resim_data$data |>
-            mutate(
-              parent_block = parent,
-              sub_block = sub_block,
-              size_label = size,
-              rep = as.character(reps)
-            ) |>
-            add_previous_status()
+          tryCatch(
+            simulate_data(
+              n_subjects = 2000, n_waves = 3, scenario = 2, 
+              resim = TRUE, betas = betas, seed = 123, verbose = FALSE)$data |>
+              mutate(
+                parent_block = parent,
+                sub_block = sub_block,
+                size_label = size,
+                rep = as.character(reps)
+              ) |>
+              add_previous_status(),
+            
+            error = function(e) {
+              message("Error in simulation (skipping): ", e$message)
+              return(NULL)
+              })
         }, .options = furrr_options(seed = TRUE))
       }, .options = furrr_options(seed = TRUE))
     }, .options = furrr_options(seed = TRUE))
@@ -190,5 +193,5 @@ message("Saving results ... ")
 
 saveRDS(
   object = transition_tibble, 
-  file = here::here("analysis/results/transition_tibble.RDS"))
+  file = here::here("analysis/Scenario_2/results/transition_tibble.RDS"))
 
