@@ -54,7 +54,6 @@ dis_plot <- dist_sum |>
       "Base Models" = "#E69F00", "True" = "#8b1a1a",
       "Additive Models" = "#56B4E9", "Multiplicative Models" = "#009E73"),
     breaks = c("Base Models", "Additive Models", "Multiplicative Models")) +
-  # ggokabeito::scale_fill_okabe_ito(alpha = 0.85) +
   labs(
     title =  "Distance Metrics by Sub‑Model and Parent Block",
     subtitle = "True Model from Base Models (highlighted in red)",
