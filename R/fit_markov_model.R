@@ -272,11 +272,23 @@ fit_markov_model <- function(
     # Serial execution ---------------------------------------------------------
     message("Running in serial mode ... ")
     
+    require(progress)
+    
+    pb <- progress::progress_bar$new(
+      format = " fitting [:bar] :percent (:current/:total) in :elapsed",
+      total  = length(sample_sizes),
+      clear  = FALSE,
+      width  = 60
+    )
+    
     for (i in seq_along(sample_sizes)) {
       
-      message("Processing sample size ", sample_sizes[i], " (", i, "/", length(sample_sizes), ")")
+      # message("Processing sample size ", sample_sizes[i], " (", i, "/", length(sample_sizes), ")")
       
-      rep_results <- fit_worker(n = sample_sizes[i])
+      pb$tick()
+      n <- sample_sizes[i]
+      
+      rep_results <- fit_worker(n)
       
       # Store results in organized structure
       results$base_models$null_models[[i]]            <- lapply(rep_results, `[[`, "base_null")
