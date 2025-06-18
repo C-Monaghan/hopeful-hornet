@@ -16,14 +16,10 @@ source(here::here("R/tidy_metrics.R"))
 path_scenario <- "./analysis/scenario_1/"
 
 # ~ 56 million rows (ooof...)
-distances <- data.table::as.data.table(readRDS(
-  file = here::here(path_scenario, "results/matrix_distances.RDS")))
-
-# Data manipulation
-tidy_metrics(distances)
-
-# Dropping matrices
-distances[, ":=" (obs_mat = NULL, sim_mat = NULL)]
+distances <- fst::read.fst(
+  here::here(path_scenario, "results/matrix_distances.fst"), 
+  as.data.table = TRUE) |>
+  tidy_metrics()
 
 # Grouping and summarizing metrics
 dist_sum <- distances[, .(value = mean(value)), by = .(parent_block, sub_model, size_label, rep, wave, metric)] |>
@@ -47,13 +43,20 @@ dist_sum <- dist_sum |>
 dis_plot <- dist_sum |>
   ggplot(aes(x = log(value), y = sub_model, fill = fill)) +
   geom_boxplot(
+    aes(colour = (fill == "True"), size = (fill == "True")),
     position = ggstance::position_dodgev(height = 0.95, preserve = "single"),
-    outlier.size = 1) +
+    outlier.size = 1, alpha = 0.7) +
   scale_fill_manual(
     values = c(
       "Base Models" = "#E69F00", "True" = "#8b1a1a",
       "Additive Models" = "#56B4E9", "Multiplicative Models" = "#009E73"),
     breaks = c("Base Models", "Additive Models", "Multiplicative Models")) +
+  scale_colour_manual(
+    values = c(`TRUE` = "#8b1a1a", `FALSE` = "grey70"),
+    guide = "none") +
+  scale_size_manual(
+    values = c(`TRUE` = 1.2, `FALSE` = 0.5), 
+    guide = "none") +
   labs(
     title =  "Distance Metrics by Sub‑Model and Parent Block",
     subtitle = "True Model from Base Models (highlighted in red)",
@@ -77,13 +80,20 @@ dis_plot <- dist_sum |>
     legend.key           = element_blank()
   )
 
-dis_plot
-
 # Saving -----------------------------------------------------------------------
+# As png
 cowplot::save_plot(
   filename = here::here(path_scenario, "results/distances.png"),
   plot = dis_plot,
   base_height = 10, 
   base_width = 25)
+
+# As pdf
+cowplot::save_plot(
+  filename = here::here(path_scenario, "results/distances.pdf"),
+  plot = dis_plot,
+  base_height = 10, 
+  base_width = 25)
+
 
   
