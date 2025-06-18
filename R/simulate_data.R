@@ -39,6 +39,7 @@ simulate_data <- function(
     n_waves = 3,                      # Number of waves
     scenario = 1:3,                   # What simulation scenario to run
     resim = FALSE,                    # Is this a resimulation
+    og_data = NULL,                   # Orginal simulated data
     betas = NULL,                     # For scenario 4: either a list-of-coefs or list-of-multinom-objects
     seed = NULL,                      # Seed (for reproducibility)
     verbose = FALSE) {                # Should messages appear         
@@ -47,8 +48,9 @@ simulate_data <- function(
   
   if(verbose) Sys.sleep(time = 1)
   
-  # ── 1) VALIDATION ───────────────────────────────────────────────────────────
+  # ----- 1) Input checks ------------------------------------------------------
   scenario <- match.arg(as.character(scenario), choices = 1:3)
+  
   stopifnot(
     is.numeric(n_subjects) && n_subjects > 0,
     is.numeric(n_waves) && n_waves > 0,
@@ -56,12 +58,13 @@ simulate_data <- function(
     is.null(seed) || is.numeric(seed)
   )
   
+  if(resim) stopifnot(!is.null(betas), inherits(x = og_data, what = "data.frame"))
+  
   # If scenario 4 but no betas supplied, throw an error:
   if (resim == TRUE && is.null(betas)) {
     stop("`resum = TRUE` requires you to pass a non‐NULL `betas` argument.")
   }
-  
-  # ── 2) SET SEED ───────────────────────────────────────────────────────────── 
+
   if(!is.null(seed)) {
     set.seed(seed)
     if(verbose) message("Random seed set to: ", seed)
@@ -69,7 +72,7 @@ simulate_data <- function(
   
   if(verbose) Sys.sleep(time = 1)
   
-  # ── 3) TRUE PARAMETER VALUES FOR SCENARIOS 1–3 ──────────────────────────────
+  # ----- 2) Original simulation -----------------------------------------------
   # Derived from empirical studies
   beta_scenario_1 <- list(
     alpha  = c(-5.152, -5.402), # Intercepts for y = 2 and y = 3
@@ -102,9 +105,79 @@ simulate_data <- function(
     beta_11 = c(-0.082, -0.021)  # x3 * y_prev = 3 effects
   )
   
-  # SCENARIO 4: getting coefficients from fitted object
-  if (resim == TRUE) { 
-    beta_scenario_4 <- betas
+  # ----- 3) Resimulation branch -----------------------------------------------
+  if(resim == TRUE) {
+    
+    if(verbose) message("Resimulating data ... ")
+    
+    df <- og_data
+    
+    # Ensure columns are factors
+    df$w  <- factor(df$w, levels = c(1:n_waves))
+    df$x1 <- factor(df$x1)
+    df$y  <- factor(df$y, levels = levels(og_data$y))
+    
+    # For storing pi values
+    pi_list <- vector(mode = "list", length = nrow(df))
+    
+    for(i in seq_len(nrow(df))) {
+      row <- df[i, ]
+      wave_i <- as.integer(as.character(row$w))
+      
+      # a) get correct previous outcome
+      y_prev <- if(wave_i == 1 & scenario != 1) {
+        
+        probs <- get_probabilities(
+          x1 = as.integer(as.character(row$x1)), 
+          x2 = row$x2, 
+          row$x3, 
+          y_prev = NULL, 
+          betas = beta_scenario_1, 
+          scenario = 1)
+        
+        draw_0 <- rmultinom(n = 1, size = 1, prob = probs)
+        which(draw_0 == 1)
+      } else {
+        # look up the newly drawn y from wave (i − 1)
+        prev_row <- df[df$ID == row$ID & df$w == (wave_i), ]
+        as.integer(as.character(prev_row$y))
+      }
+      
+      # b) recompute transition probabilities
+      probs <- get_probabilities(
+        x1       = as.integer(as.character(row$x1)),
+        x2       = row$x2, 
+        x3       = row$x3, 
+        y_prev   = y_prev,
+        betas    = betas,
+        scenario = scenario
+      )
+      
+      pi_list[[i]] <- probs
+      
+      # c) draw a new y
+      draw    <- rmultinom(n = 1, size = 1, prob = probs)
+      df$y[i] <- factor(which(draw == 1), levels = levels(df$y))
+    }
+    
+    # rebuild the pi_values data.frame
+    pi_mat <- do.call(rbind, pi_list)
+    colnames(pi_mat) <- paste0("pi_", seq_len(ncol(pi_mat)))
+    pi_df <- cbind(df[, c("ID", "w")], pi_mat) |> as_tibble()
+    
+    return(list(
+      data       = df,
+      true_betas = betas,
+      pi_values  = pi_df,
+      metadata   = list(
+        resim      = TRUE,
+        scenario   = scenario,
+        n_subjects = n_subjects,
+        n_waves    = n_waves,
+        seed       = seed,
+        timestamp  = Sys.time()
+      )
+    ))
   }
   
   if(verbose) message("Generating subject level data ... ")
@@ -180,17 +253,12 @@ simulate_data <- function(
     # Getting scenario specific data (previous y and beta values)
     y_prev <- if(scenario != 1) wave_0_df$y[wave_0_df$ID == id] else NULL
     
-    # What beta values to use
-    if(resim == TRUE) {
-      betas <- beta_scenario_4
-    } else {
-      betas <- switch(
-        as.character(scenario),
-        "1" = beta_scenario_1,
-        "2" = beta_scenario_2,
-        "3" = beta_scenario_3
-      ) 
-    }
+    betas <- switch(
+      as.character(scenario),
+      "1" = beta_scenario_1,
+      "2" = beta_scenario_2,
+      "3" = beta_scenario_3
+      )
     
     # ── 6.1) INITIAL STATE (wave = 1) ─────────────────────────────────────────
     probs <- get_probabilities(
