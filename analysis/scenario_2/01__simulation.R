@@ -96,7 +96,8 @@ resimulation <- with_progress({
           tryCatch(
             simulate_data(
               n_subjects = 2000, n_waves = 3, scenario = 2, 
-              resim = TRUE, betas = betas, seed = 123, verbose = FALSE)$data |>
+              resim = TRUE, og_data = sim$data, betas = betas, 
+              seed = 123, verbose = FALSE)$data |>
               mutate(
                 parent_block = parent,
                 sub_block = sub_block,
@@ -115,10 +116,12 @@ resimulation <- with_progress({
   }, .options = furrr_options(seed = TRUE))
 })
 
-# message("Saving resimulation ... ")
+# Saving resimulation data (for later use) -------------------------------------
+message("Saving resimulation data ... ")
 
-# Saving re simulation in case of background job breaking (again ...)
-# saveRDS(object = resimulation, file = here::here("analysis/scenario_2/results/resim.RDS"))
+saveRDS(
+  object = resimulation, 
+  file = here::here("analysis/scenario_2/results/resim.RDS"))
 
 # 9) Compute individual transition matrices, filtered by PIDs ------------------
 message("Computing individual transitions ... ")

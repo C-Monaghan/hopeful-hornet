@@ -27,7 +27,7 @@ walk(func_files, source)
 # 4. Simulating "true" data ----------------------------------------------------
 sim <- simulate_data(
   n_subjects = 2000, n_waves = 3, scenario = 1, 
-  resim = FALSE, betas = NULL, seed = 123, verbose = TRUE)
+  resim = FALSE, betas = NULL, og_data = NULL, seed = 123, verbose = TRUE)
 
 # Adding previous states
 data <- sim$data |> add_previous_status()
@@ -67,7 +67,7 @@ pids_df <- imap(models$idv_trans, function(by_reps, size_label) {
 # 8) Resimulate from each β‑list in parallel -----------------------------------
 message("Resimulating data ... ")
 
-num_tasks <- model_coefs |> listr::list_flatten(max_depth = 2) |> length()
+num_tasks <- model_coefs |> listr::list_flatten(max_depth = 3) |> length()
 
 resimulation <- with_progress({
   p <- progressor(steps = num_tasks)
@@ -95,7 +95,8 @@ resimulation <- with_progress({
           
           resim_data <- simulate_data(
             n_subjects = 2000, n_waves = 3, scenario = 1, 
-            resim = TRUE, betas = betas, seed = 123, verbose = FALSE
+            resim = TRUE, og_data = sim$data, betas = betas, 
+            seed = 123, verbose = FALSE
           )
           
           resim_data$data |>
@@ -112,83 +113,90 @@ resimulation <- with_progress({
   }, .options = furrr_options(seed = TRUE))
 })
 
-# 9) Compute individual transition matrices, filtered by PIDs ------------------
-message("Computing individual transitions ... ")
-
-num_tasks <- resimulation |> listr::list_flatten(max_depth = 3) |> length()
-
-indiv_transitions <- with_progress({
-  p <- progressor(steps = num_tasks)
-  
-  future_imap(resimulation, function(by_sub_blocks, parent) {
-    future_imap(by_sub_blocks, function(by_sizes, sub_block) {
-      future_imap(by_sizes, function(by_data_list, size_label) {
-        future_map(by_data_list, function(df) {
-          
-          p()
-          
-          # Filtering down to same participants used in model sample
-          df <- df |>
-            semi_join(pids_df, by = c("ID", "size_label", "rep"))
-          
-          # Return NULL if no one is on data
-          if (nrow(df) == 0) return(NULL)
-          
-          # Calculating individual transitions (with error handling)
-          tryCatch(
-            create_individual_transition_matrices(data = df),
-            error = function(e) {
-              message("Transition error: ", e$message)
-              return(NULL)
-            })
-        }, .options = furrr_options(seed = TRUE)) # end of by_data_list
-      }, .options = furrr_options(seed = TRUE)) # End of by_sizes
-    }, .options = furrr_options(seed = TRUE)) # End of by_sub_blocks
-  }, .options = furrr_options(seed = TRUE)) # End of resimulation
-})
-
-# Memory cleaning
-rm(model_fits, model_coefs, resimulation)
-
-# 10) Compute matrix‐distance metrics ------------------------------------------
-# Flatten all transitons into one tibble
-message("Computing matrix tibble ... ")
-
-transition_tibble <- imap_dfr(indiv_transitions, function(by_sub_model, parent) {
-  imap_dfr(by_sub_model, function(by_size, sub_model) {
-    imap_dfr(by_size, function(reps, size_label) {
-      imap_dfr(reps, function(sim_list, rep_index) {
-        obs_list <- models$idv_trans[[size_label]][[rep_index]]
-        
-        # for each PID and wave, extract sim and obs matrices
-        imap_dfr(sim_list, function(sim_pid_list, pid) {
-          common_waves <- intersect(names(sim_pid_list), names(obs_list[[pid]]))
-          tibble(
-            parent_block = parent,
-            sub_model    = sub_model,
-            size_label   = size_label,
-            rep          = rep_index,
-            ID           = stringr::str_remove(pid, "^p_"),
-            wave         = common_waves,
-            sim_mat      = sim_pid_list[common_waves] |> map(as.matrix),
-            obs_mat      = obs_list[[pid]][common_waves] |> map(as.matrix)
-          )
-        }) # End of sim_list
-      }) # End of reps
-    }) # End of by_size
-  }) # End of by_sub_model
-})
-
-# Memory cleaning
-rm(data, indiv_transitions, models, pids_df, sim)
-
-# Resetting to sequential processing
-plan(sequential)
-
-# 11) Exporting ----------------------------------------------------------------
-message("Saving results ... ")
+# Saving resimulation data (for later use) -------------------------------------
+message("Saving resimulation data ... ")
 
 saveRDS(
-  object = transition_tibble, 
-  file = here::here("analysis/results/transition_tibble.RDS"))
+  object = resimulation, 
+  file = here::here("analysis/scenario_1/results/resim.RDS"))
 
+# 9) Compute individual transition matrices, filtered by PIDs ------------------
+# message("Computing individual transitions ... ")
+# 
+# num_tasks <- resimulation |> listr::list_flatten(max_depth = 3) |> length()
+# 
+# indiv_transitions <- with_progress({
+#   p <- progressor(steps = num_tasks)
+#   
+#   future_imap(resimulation, function(by_sub_blocks, parent) {
+#     future_imap(by_sub_blocks, function(by_sizes, sub_block) {
+#       future_imap(by_sizes, function(by_data_list, size_label) {
+#         future_map(by_data_list, function(df) {
+#           
+#           p()
+#           
+#           # Filtering down to same participants used in model sample
+#           df <- df |>
+#             semi_join(pids_df, by = c("ID", "size_label", "rep"))
+#           
+#           # Return NULL if no one is on data
+#           if (nrow(df) == 0) return(NULL)
+#           
+#           # Calculating individual transitions (with error handling)
+#           tryCatch(
+#             create_individual_transition_matrices(data = df),
+#             error = function(e) {
+#               message("Transition error: ", e$message)
+#               return(NULL)
+#             })
+#         }, .options = furrr_options(seed = TRUE)) # end of by_data_list
+#       }, .options = furrr_options(seed = TRUE)) # End of by_sizes
+#     }, .options = furrr_options(seed = TRUE)) # End of by_sub_blocks
+#   }, .options = furrr_options(seed = TRUE)) # End of resimulation
+# })
+# 
+# # Memory cleaning
+# rm(model_fits, model_coefs, resimulation)
+# 
+# # 10) Compute matrix‐distance metrics ------------------------------------------
+# # Flatten all transitons into one tibble
+# message("Computing matrix tibble ... ")
+# 
+# transition_tibble <- imap_dfr(indiv_transitions, function(by_sub_model, parent) {
+#   imap_dfr(by_sub_model, function(by_size, sub_model) {
+#     imap_dfr(by_size, function(reps, size_label) {
+#       imap_dfr(reps, function(sim_list, rep_index) {
+#         obs_list <- models$idv_trans[[size_label]][[rep_index]]
+#         
+#         # for each PID and wave, extract sim and obs matrices
+#         imap_dfr(sim_list, function(sim_pid_list, pid) {
+#           common_waves <- intersect(names(sim_pid_list), names(obs_list[[pid]]))
+#           tibble(
+#             parent_block = parent,
+#             sub_model    = sub_model,
+#             size_label   = size_label,
+#             rep          = rep_index,
+#             ID           = stringr::str_remove(pid, "^p_"),
+#             wave         = common_waves,
+#             sim_mat      = sim_pid_list[common_waves] |> map(as.matrix),
+#             obs_mat      = obs_list[[pid]][common_waves] |> map(as.matrix)
+#           )
+#         }) # End of sim_list
+#       }) # End of reps
+#     }) # End of by_size
+#   }) # End of by_sub_model
+# })
+# 
+# # Memory cleaning
+# rm(data, indiv_transitions, models, pids_df, sim)
+# 
+# # Resetting to sequential processing
+# plan(sequential)
+# 
+# # 11) Exporting ----------------------------------------------------------------
+# message("Saving results ... ")
+# 
+# saveRDS(
+#   object = transition_tibble, 
+#   file = here::here("analysis/scenario_1/results/transition_tibble.RDS"))
+# 

@@ -1,3 +1,5 @@
+# Matrix distance calculation
+
 rm(list = ls())
 
 # Packages ---------------------------------------------------------------------
@@ -8,7 +10,9 @@ pacman::p_load(
   progressr
 )
 
-source(here::here("R/compare_matrices.R"))
+# Functions --------------------------------------------------------------------
+# Using a C++ function instead of an R one
+Rcpp::sourceCpp(file = here::here("R/compare_matrices.cpp"))
 
 # Reading in transition data ---------------------------------------------------
 message("Reading in data ... ")
@@ -22,30 +26,30 @@ message("Calculating distances ... ")
 
 num_tasks <- nrow(transitions)
 
+# C++ functions cannot be parallelised so we use pmap() instead of future_pmap()
 matrix_distances <- with_progress({
   
   p <- progressor(steps = num_tasks)
   
   transitions |>
     mutate(
-      results = future_pmap(list(obs_mat, sim_mat), function(obs_mat, sim_mat) {
+      results = pmap(list(obs_mat, sim_mat), function(obs_mat, sim_mat) {
         
         p()
         
         tryCatch(
-          compare_matrices(obs_mat = obs_mat, sim_mat = sim_mat),
+          compare_matrices_rcpp(Obs = obs_mat, Sim = sim_mat),
           error = function(e) {
             message("Transition error: ", e$message)
             return(NULL)
           })
-      }, .options = furrr_options(seed = TRUE))
+      })
     ) |>
     tidyr::unnest(results)
 })
 
-# Removing transition matrices
-matrix_distances <- matrix_distances |> 
-  select(-c(sim_mat, obs_mat))
+# Removing large transition columns
+matrix_distances <- matrix_distances |> select(-c(sim_mat, obs_mat))
 
 # Exporting --------------------------------------------------------------------
 message("Saving results ... ")

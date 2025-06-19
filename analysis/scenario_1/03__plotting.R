@@ -80,6 +80,48 @@ dis_plot <- dist_sum |>
     legend.key           = element_blank()
   )
 
+# Stacked bar chart
+distances[, .(value = mean(value)), 
+          by = .(parent_block, sub_model, size_label, metric)] |>
+  tibble::as_tibble() |>
+  mutate(
+    fill = case_when(
+      parent_block == "Base Models" & sub_model == "True Model" ~ "True",
+      parent_block == "Base Models" ~ "Base Models",
+      parent_block == "Additive Models" ~ "Additive Models",
+      parent_block == "Multiplicative Models" ~  "Multiplicative Models"
+    ),
+    fill = factor(
+      fill, 
+      levels = c("Base Models", "True", "Additive Models", "Multiplicative Models"))
+  ) |>
+  mutate(
+    parent_block = stringr::str_remove(parent_block, " Models"),
+    parent_block = factor(
+      parent_block, levels = c("Base", "Additive", "Multiplicative"))) |>
+  ggplot(aes(y = sub_model, x = log(value), fill = parent_block)) +
+  geom_col(aes(colour = (fill == "True"))) +
+  scale_colour_manual(
+    values = c(`TRUE` = "#8b1a1a", `FALSE` = "grey70"),
+    guide = "none") +
+  ggokabeito::scale_fill_okabe_ito() +
+  labs(title = "Stacked average distances by sub‐model, sample size & block",
+       subtitle = "True model comes from (True model; Base model)",
+       x = "Log-transformed distance", y = "Sub Model", fill = NULL) +
+  facet_grid(size_label ~ metric, scales = "free_x") +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 12, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 10, face = "bold"),
+    axis.title = element_text(size = 10, face = "bold"),
+    axis.text.x   = element_text(angle = 30, hjust = 1),
+    panel.spacing = unit(0.5, "lines"),
+    strip.background = element_rect(fill = "grey95", colour = NA),
+    legend.position = "bottom"
+  )
+  
+
+
 # Saving -----------------------------------------------------------------------
 # As png
 cowplot::save_plot(
