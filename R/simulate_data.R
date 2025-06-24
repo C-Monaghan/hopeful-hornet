@@ -110,55 +110,60 @@ simulate_data <- function(
     
     if(verbose) message("Resimulating data ... ")
     
-    df <- og_data
+    # As a datatable object
+    df <- copy(og_data)
+    setDT(df)
     
     # Ensure columns are factors
-    df$w  <- factor(df$w, levels = c(1:n_waves))
-    df$x1 <- factor(df$x1)
-    df$y  <- factor(df$y, levels = levels(og_data$y))
+    df[, `:=`(
+      w = factor(w, levels = 1:n_waves),
+      x1 = factor(x1),
+      y = factor(y, levels = levels(og_data$y))
+    )]
     
-    # For storing pi values
-    pi_list <- vector(mode = "list", length = nrow(df))
+    # Pre-allocate
+    n       <- nrow(df)
+    pi_list <- vector("list", n)
+    y_drawn <- integer(n)
     
-    for(i in seq_len(nrow(df))) {
-      row <- df[i, ]
-      wave_i <- as.integer(as.character(row$w))
+    # Extract vectors for fast access
+    ids     <- df$ID
+    waves   <- as.integer(as.character(df$w))
+    x1_vals <- as.integer(as.character(df$x1))
+    x2_vals <- df$x2
+    x3_vals <- df$x3
+    
+    for(i in seq_len(n)) {
+      wave_i <- waves[i]
+      id_i   <- ids[i]
       
       # a) get correct previous outcome
       y_prev <- if(wave_i == 1 & scenario != 1) {
         
         probs <- get_probabilities(
-          x1 = as.integer(as.character(row$x1)), 
-          x2 = row$x2, 
-          row$x3, 
-          y_prev = NULL, 
-          betas = beta_scenario_1, 
-          scenario = 1)
+          x1 = x1_vals[i], x2 = x2_vals[i], x3 = x3_vals[i], 
+          y_prev = NULL, betas = beta_scenario_1, scenario = 1)
         
-        draw_0 <- rmultinom(n = 1, size = 1, prob = probs)
-        which(draw_0 == 1)
+        which.max(rmultinom(n = 1, size = 1, prob = probs))
       } else {
         # look up the newly drawn y from wave (i − 1)
-        prev_row <- df[df$ID == row$ID & df$w == (wave_i), ]
-        as.integer(as.character(prev_row$y))
+        prev_i <- which(ids == id_i & waves == wave_i)
+        as.integer(as.character(y_drawn[prev_i]))
       }
       
       # b) recompute transition probabilities
       probs <- get_probabilities(
-        x1       = as.integer(as.character(row$x1)),
-        x2       = row$x2, 
-        x3       = row$x3, 
-        y_prev   = y_prev,
-        betas    = betas,
-        scenario = scenario
-      )
+        x1 = x1_vals[i], x2 = x2_vals[i], x3 = x3_vals[i],
+        y_prev = y_prev, betas = betas, scenario = scenario)
       
       pi_list[[i]] <- probs
       
       # c) draw a new y
-      draw    <- rmultinom(n = 1, size = 1, prob = probs)
-      df$y[i] <- factor(which(draw == 1), levels = levels(df$y))
+      y_drawn[i] <- which.max(rmultinom(n = 1, size = 1, prob = probs))
     }
+    
+    # Making y a factor
+    df$y <- factor(y_drawn, levels = levels(df$y))
     
     # rebuild the pi_values data.frame
     pi_mat <- do.call(rbind, pi_list)
@@ -166,7 +171,7 @@ simulate_data <- function(
     pi_df <- cbind(df[, c("ID", "w")], pi_mat) |> as_tibble()
     
     return(list(
-      data       = df,
+      data       = tibble::as_tibble(df),
       true_betas = betas,
       pi_values  = pi_df,
       metadata   = list(
