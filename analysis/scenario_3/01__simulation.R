@@ -10,7 +10,8 @@ pacman::p_load(
   purrr,
   furrr,
   progressr,
-  ggplot2
+  ggplot2,
+  data.table
 )
 
 # 2. Parallel back-end ----------------------------------------------------------
@@ -26,7 +27,7 @@ walk(func_files, source)
 
 # 4. Simulating "true" data ----------------------------------------------------
 sim <- simulate_data(
-  n_subjects = 2000, n_waves = 3, scenario = 3, 
+  n_subjects = 10000, n_waves = 3, scenario = 3, 
   resim = FALSE, betas = NULL, seed = 123, verbose = TRUE)
 
 # Adding previous states
@@ -35,9 +36,9 @@ data <- sim$data |> add_previous_status()
 # 5) Fit base, additive, multiplicative models ---------------------------------
 models <- fit_markov_model(
   data         = data, 
-  sample_sizes = c(100, 250, 1000), 
+  sample_sizes = c(100, 250, 1000, 5000), 
   n_reps       = 200,
-  parallel     = FALSE,
+  parallel     = TRUE,
   seed         = 125)
 
 # 6) Extract β‑lists -----------------------------------------------------------
@@ -95,7 +96,7 @@ resimulation <- with_progress({
           
           tryCatch(
             simulate_data(
-              n_subjects = 2000, n_waves = 3, scenario = 3, 
+              n_subjects = 10000, n_waves = 3, scenario = 3, 
               resim = TRUE, og_data = sim$data, 
               betas = betas, seed = 123, verbose = FALSE)$data |>
               mutate(

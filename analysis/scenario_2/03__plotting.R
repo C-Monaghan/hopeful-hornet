@@ -1,5 +1,7 @@
-# Plotting distance metrics ----------------------------------------------------
+# Scenario 2 -------------------------------------------------------------------
 rm(list = ls())
+
+message("Setting up ...")
 
 # Packages ---------------------------------------------------------------------
 pacman::p_load(
@@ -10,11 +12,38 @@ pacman::p_load(
   ggplot2
 )
 
+# Set theme --------------------------------------------------------------------
+theme_set(
+  theme_minimal(base_size = 12) +
+    theme(
+      plot.title           = element_text(face = "bold", size = 14, hjust = 0.5),
+      plot.subtitle        = element_text(face = "bold", size = 12, hjust = 0.5),
+      axis.text.y          = element_text(face = "bold"),
+      axis.text.x          = element_text(angle = 45, hjust = 1),
+      strip.background     = element_rect(fill = "#F0F0F0", colour = NA),
+      strip.text           = element_text(face = "bold", size = 11),
+      panel.grid.major.y   = element_blank(),
+      panel.grid.minor     = element_blank(),
+      legend.position      = "bottom",
+      legend.background    = element_rect(fill = "transparent"),
+      legend.key           = element_blank()
+    )
+)
+
 # Functions --------------------------------------------------------------------
 source(here::here("R/tidy_metrics.R"))
+source(here::here("R/highlight_true.R"))
 
 # Data -------------------------------------------------------------------------
 path_scenario <- "./analysis/scenario_2/"
+
+true_model <- case_when(
+  stringr::str_detect(string = path_scenario, pattern = "scenario_1") ~ "Base",
+  stringr::str_detect(string = path_scenario, pattern = "scenario_2") ~ "Additive",
+  stringr::str_detect(string = path_scenario, pattern = "scenario_3") ~ "Multiplicative"
+  )
+
+message("Reading in data ... ")
 
 # ~ 56 million rows (ooof...)
 distances <- fst::read.fst(
@@ -22,27 +51,42 @@ distances <- fst::read.fst(
   as.data.table = TRUE) |> 
   tidy_metrics()
 
+message("Summarising data ... ")
+
 # Grouping and summarizing metrics
 dist_sum <- distances[, .(value = mean(value)), by = .(parent_block, sub_model, size_label, rep, wave, metric)] |>
-  tibble::as_tibble()
+  tibble::as_tibble() |>
+  filter(metric != "Kullback-Leibler Divergence")
 
 # Highlighting the "true model"
-dist_sum <- dist_sum |>
-  mutate(
-    fill = case_when(
-      parent_block == "Additive Models" & sub_model == "True Model" ~ "True",
-      parent_block == "Base Models" ~ "Base Models",
-      parent_block == "Additive Models" ~ "Additive Models",
-      parent_block == "Multiplicative Models" ~  "Multiplicative Models"
-    ),
-    fill = factor(
-      fill, 
-      levels = c("Base Models", "True", "Additive Models", "Multiplicative Models"))
-  )
+dist_sum <- dist_sum |> 
+  highlight_true(true_model = true_model, usage = "Parent")
+
+message("Finding best model ...")
+
+# Summarizing best model
+best_models <- dist_sum |>
+  # Collapse the wave column
+  group_by(parent_block, sub_model, size_label, rep, metric) |>
+  summarise(value = mean(value), .groups = "drop") |>
+  # Identify which sub_model had the lowest distance per metric + rep
+  group_by(parent_block, size_label, rep, metric) |>
+  filter(value == min(value)) |>
+  ungroup() |>
+  # Count how often each sub_model wins per metric
+  count(parent_block, sub_model, size_label, metric, name = "n_wins") |>
+  group_by(parent_block, size_label, metric) |>
+  # Transform to a percentage
+  mutate(prop = n_wins / sum(n_wins)) |>
+  ungroup() |>
+  # Highlight the TRUE model (for plotting purposes)
+  highlight_true(true_model = true_model, usage = "Sub")
+
+message("Plotting ... ")
 
 # Plotting ---------------------------------------------------------------------
-dis_plot <- dist_sum |>
-  ggplot(aes(x = log(value), y = sub_model, fill = fill)) +
+dis_box <- dist_sum |>
+  ggplot(aes(x = value, y = sub_model, fill = fill)) +
   geom_boxplot(
     aes(colour = (fill == "True"), size = (fill == "True")),
     position = ggstance::position_dodgev(height = 0.95, preserve = "single"),
@@ -59,40 +103,63 @@ dis_plot <- dist_sum |>
     values = c(`TRUE` = 1.2, `FALSE` = 0.5), 
     guide = "none") +
   labs(
-    title =  "Distance Metrics by Sub‑Model and Parent Block",
-    subtitle = "True Model from Additive Models (highlighted in red)",
-    x     =  "Log(distance)",
-    y     =  NULL,
-    fill  =  NULL
+    title    =  "Distance Metrics by Sub‑Model and Parent Block",
+    subtitle = paste0("True Model from ", true_model, " Models (highlighted in red)"),
+    x        =  "Distance",
+    y        =  NULL,
+    fill     =  NULL
   ) +
-  facet_grid(size_label ~ metric, scales = "free_x") +
-  theme_minimal(base_size = 12) +
-  theme(
-    panel.grid.major.y   = element_blank(),
-    panel.grid.minor     = element_blank(),
-    strip.background     = element_rect(fill = "#F0F0F0", colour = NA),
-    strip.text           = element_text(face = "bold", size = 11),
-    axis.text.y          = element_text(face = "bold"),
-    axis.text.x          = element_text(angle = 45, hjust = 1),
-    plot.title           = element_text(face = "bold", size = 14, hjust = 0.5),
-    plot.subtitle        = element_text(face = "bold", size = 12, hjust = 0.5),
-    legend.position      = "bottom",
-    legend.background    = element_rect(fill = "transparent"),
-    legend.key           = element_blank()
-  )
+  facet_grid(size_label ~ metric, scales = "free_x")
+
+dis_bar <- best_models |>
+  ggplot(aes(x = parent_block, y = prop, fill = fill)) +
+  geom_col(colour = "black") + 
+  geom_text(
+    aes(label = ifelse(prop >= 0.04, scales::percent(prop, accuracy = 1), NA)),
+    position = position_stack(vjust = 0.5),
+    size = 3
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Null Model" = "#E69F00", "Reduced Model 1" = "#56B4E9", 
+      "Reduced Model 2" = "#009e73", "True Model" = "#F0E442",
+      "Other" = "#F0E44233", "Overfit Model" = "#0072B2"),
+    breaks = c("Null Model", "Reduced Model 1", 
+               "Reduced Model 2", "True Model", "Overfit Model")) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    title = "Proportion of times when each model had the lowest distance metric",
+    x = "Model Type",
+    y = "Proportion of Repetitions as best", 
+    fill = "Sub Model") +
+  facet_grid(size_label ~ metric, space = "free")
+
+message("Exporting data ... ")
 
 # Saving -----------------------------------------------------------------------
 # As png
 cowplot::save_plot(
-  filename = here::here(path_scenario, "results/distances.png"),
-  plot = dis_plot,
+  filename = here::here(path_scenario, "results/figures/distances_box.png"),
+  plot = dis_box,
+  base_height = 10, 
+  base_width = 25)
+
+cowplot::save_plot(
+  filename = here::here(path_scenario, "results/figures/distances_bar.png"),
+  plot = dis_bar,
   base_height = 10, 
   base_width = 25)
 
 # As pdf
 cowplot::save_plot(
-  filename = here::here(path_scenario, "results/distances.pdf"),
-  plot = dis_plot,
+  filename = here::here(path_scenario, "results/figures/distances_box.pdf"),
+  plot = dis_box,
+  base_height = 10, 
+  base_width = 25)
+
+cowplot::save_plot(
+  filename = here::here(path_scenario, "results/figures/distances_bar.pdf"),
+  plot = dis_bar,
   base_height = 10, 
   base_width = 25)
 
