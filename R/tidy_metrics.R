@@ -47,7 +47,7 @@ tidy_metrics <- function(metrics) {
   
   metrics[, size_label := factor(
     size_label,
-    levels = c("n = 100", "n = 250", "n = 1000")
+    levels = c("n = 100", "n = 250", "n = 1000", "n = 5000")
   )]
   
   metrics[, wave := factor(
