@@ -7,16 +7,25 @@ rm(list = ls()) # To annoy Rafael
 # 1. Loading packages ----------------------------------------------------------
 pacman::p_load(
   dplyr,
+  stringr,
   purrr,
   furrr,
   progressr,
-  ggplot2,
-  data.table
+  data.table,
+  this.path
+)
+
+# Scenario setup
+scenario <- case_when(
+  stringr::str_detect(this.path(), "scenario_1") ~ 1,
+  stringr::str_detect(this.path(), "scenario_2") ~ 2,
+  stringr::str_detect(this.path(), "scenario_3") ~ 3
 )
 
 # 2. Parallel back-end ----------------------------------------------------------
 plan(multisession, workers = parallel::detectCores() - 1)
 
+handlers(global = TRUE)
 handlers("txtprogressbar")
 
 # 3. Simulation functions ------------------------------------------------------
@@ -27,7 +36,7 @@ walk(func_files, source)
 
 # 4. Simulating "true" data ----------------------------------------------------
 sim <- simulate_data(
-  n_subjects = 10000, n_waves = 3, scenario = 2, 
+  n_subjects = 10000, n_waves = 3, scenario = scenario, 
   resim = FALSE, betas = NULL, seed = 123, verbose = TRUE)
 
 # Adding previous states
@@ -96,7 +105,7 @@ resimulation <- with_progress({
           
           tryCatch(
             simulate_data(
-              n_subjects = 10000, n_waves = 3, scenario = 2, 
+              n_subjects = 10000, n_waves = 3, scenario = scenario, 
               resim = TRUE, og_data = sim$data, betas = betas, 
               seed = 123, verbose = FALSE)$data |>
               mutate(
@@ -122,7 +131,7 @@ message("Saving resimulation data ... ")
 
 saveRDS(
   object = resimulation, 
-  file = here::here("analysis/scenario_2/results/resim.RDS"))
+  file = file.path(this.dir(), "results/resim.RDS"))
 
 # 9) Compute individual transition matrices, filtered by PIDs ------------------
 message("Computing individual transitions ... ")
@@ -149,14 +158,17 @@ indiv_transitions <- with_progress({
             message("Joining error: ", e$message)
             return(NULL)
           })
+          
+          if(is.null(df) || nrow(df) == 0) return(NULL)
 
           # Calculating individual transitions (with error handling)
-          tryCatch({
-            create_individual_transition_matrices(data = df)
-            }, error = function(e) {
+          tryCatch(
+            create_individual_transition_matrices(data = df),
+            error = function(e) {
               message("Transition error: ", e$message)
               return(NULL)
-            })
+            }
+          )
         }, .options = furrr_options(seed = TRUE)) # end of by_data_list
       }, .options = furrr_options(seed = TRUE)) # End of by_sizes
     }, .options = furrr_options(seed = TRUE)) # End of by_sub_blocks
@@ -170,30 +182,8 @@ rm(model_fits, model_coefs, resimulation)
 # Flatten all transitons into one tibble
 message("Computing matrix tibble ... ")
 
-transition_tibble <- imap_dfr(indiv_transitions, function(by_sub_model, parent) {
-  imap_dfr(by_sub_model, function(by_size, sub_model) {
-    imap_dfr(by_size, function(reps, size_label) {
-      imap_dfr(reps, function(sim_list, rep_index) {
-        obs_list <- models$idv_trans[[size_label]][[rep_index]]
-
-        # for each PID and wave, extract sim and obs matrices
-        imap_dfr(sim_list, function(sim_pid_list, pid) {
-          common_waves <- intersect(names(sim_pid_list), names(obs_list[[pid]]))
-          tibble(
-            parent_block = parent,
-            sub_model    = sub_model,
-            size_label   = size_label,
-            rep          = rep_index,
-            ID           = stringr::str_remove(pid, "^p_"),
-            wave         = common_waves,
-            sim_mat      = sim_pid_list[common_waves] |> map(as.matrix),
-            obs_mat      = obs_list[[pid]][common_waves] |> map(as.matrix)
-          )
-        }) # End of sim_list
-      }) # End of reps
-    }) # End of by_size
-  }) # End of by_sub_model
-})
+transition_tibble <- extract_transition_pairs(
+  indiv_transitions = indiv_transitions, models = models)
 
 # Memory cleaning
 rm(data, indiv_transitions, models, pids_df, sim)
@@ -206,5 +196,4 @@ message("Saving results ... ")
 
 saveRDS(
   object = transition_tibble,
-  file = here::here("analysis/scenario_2/results/transition_tibble.RDS"))
-
+  file = file.path(this.dir(), "results/transition_tibble.RDS"))

@@ -1,59 +1,70 @@
-# Matrix distance calculation
+# Matrix distance calculation (scenario 1)
 
 rm(list = ls())
 
 # Packages ---------------------------------------------------------------------
 pacman::p_load(
-  dplyr,
-  purrr,
-  furrr,
-  progressr
+  progressr,
+  this.path,
+  here
 )
 
 # Functions --------------------------------------------------------------------
 # Using a C++ function instead of an R one
-Rcpp::sourceCpp(file = here::here("R/compare_matrices.cpp"))
+Rcpp::sourceCpp(file = here("R/compare_matrices.cpp"))
 
 # Reading in transition data ---------------------------------------------------
 message("Reading in data ... ")
 
-path_scenario <- "./analysis/scenario_1/"
+path_scenario <- this.dir()
 
-transitions <- readRDS(here::here(path_scenario, "results/transition_tibble.RDS"))
+transitions <- readRDS(here(path_scenario, "results/transition_tibble.RDS"))
 
-# Calculating matrix distances -------------------------------------------------
-message("Calculating distances ... ")
+# Setting up distances ---------------------------------------------------------
+# Preallocate result list
+results_list <- vector("list", length = num_tasks)
 
+# Progress bar
 num_tasks <- nrow(transitions)
 
-# C++ functions cannot be parallelised so we use pmap() instead of future_pmap()
-matrix_distances <- with_progress({
-  
-  p <- progressor(steps = num_tasks)
-  
-  transitions |>
-    mutate(
-      results = pmap(list(obs_mat, sim_mat), function(obs_mat, sim_mat) {
-        
-        p()
-        
-        tryCatch(
-          compare_matrices_rcpp(Obs = obs_mat, Sim = sim_mat),
-          error = function(e) {
-            message("Transition error: ", e$message)
-            return(NULL)
-          })
-      })
-    ) |>
-    tidyr::unnest(results)
-})
+pb <- txtProgressBar(min = 0, max = num_tasks, style = 3)
 
-# Removing large transition columns
-matrix_distances <- matrix_distances |> select(-c(sim_mat, obs_mat))
+# Calculating matrix distances -------------------------------------------------
+for (i in seq_len(num_tasks)) {
+  obs <- transitions$obs_mat[[i]]
+  sim <- transitions$sim_mat[[i]]
+  
+  # Using C++ code
+  results_list[[i]] <- tryCatch(
+    compare_matrices_rcpp(obs, sim),
+    error = function(e) {
+      message(sprintf("Error in row %d: %s", i, e$message))
+      NULL
+    }
+  )
+  
+  # Update progress bar
+  setTxtProgressBar(pb, i)
+}
+
+close(pb) # Close progress bar
+
+# Bind rows
+results_dt <- data.table::rbindlist(results_list, fill = TRUE, idcol = "row_id")
+
+# Merge with metadata
+metadata <- transitions |>
+  dplyr::select(-c(obs_mat, sim_mat)) |>
+  dplyr::mutate(row_id = row_number())
+
+# Join into one dataset
+matrix_distances <- metadata |> 
+  dplyr::left_join(results_dt, by = "row_id") |>
+  dplyr::select(-row_id)
 
 # Exporting --------------------------------------------------------------------
 message("Saving results ... ")
 
 fst::write.fst(
   x = matrix_distances, 
-  path = here::here(path_scenario, "results/matrix_distances.fst"))
+  path = here(path_scenario, "results/matrix_distances.fst"))

@@ -45,7 +45,7 @@ true_model <- case_when(
 
 message("Reading in data ... ")
 
-# ~ 56 million rows (ooof...)
+# ~ 266 million rows (ooof...)
 distances <- fst::read.fst(
   path = here::here(path_scenario, "results/matrix_distances.fst"), 
   as.data.table = TRUE) |> 
@@ -68,18 +68,22 @@ message("Finding best model ...")
 best_models <- dist_sum |>
   # Collapse the wave column
   group_by(parent_block, sub_model, size_label, rep, metric) |>
-  summarise(value = mean(value), .groups = "drop") |>
-  # Identify which sub_model had the lowest distance per metric + rep
-  group_by(parent_block, size_label, rep, metric) |>
-  filter(value == min(value)) |>
-  ungroup() |>
-  # Count how often each sub_model wins per metric
-  count(parent_block, sub_model, size_label, metric, name = "n_wins") |>
-  group_by(parent_block, size_label, metric) |>
-  # Transform to a percentage
-  mutate(prop = n_wins / sum(n_wins)) |>
-  ungroup() |>
-  # Highlight the TRUE model (for plotting purposes)
+  summarise(value = mean(value), .groups = "drop") |> 
+  # Compute by metric (probably unnecessary ... )
+  split(~ metric) |>
+  purrr::map_dfr(function(m) {
+    m |>
+      # Rank the models per repetition
+      group_by(parent_block, size_label, rep) |>
+      mutate(winning = rank(value)) |>
+      ungroup() |>
+      # Which model had the lowest metric
+      mutate(lowest = ifelse(winning == 1, TRUE, FALSE)) |>
+      group_by(parent_block, sub_model, size_label, metric) |>
+      # Count each win and summarise
+      summarise(n_lowest = sum(lowest), .groups = "drop") |>
+      mutate(prop = n_lowest / 200)
+  }) |>
   highlight_true(true_model = true_model, usage = "Sub")
 
 message("Plotting ... ")
@@ -128,7 +132,7 @@ dis_bar <- best_models |>
                "Reduced Model 2", "True Model", "Overfit Model")) +
   scale_y_continuous(labels = scales::percent_format()) +
   labs(
-    title = "Proportion of times when each model had the lowest distance metric",
+    title = "Proportion of times when each model was identified as the best",
     x = "Model Type",
     y = "Proportion of Repetitions as best", 
     fill = "Sub Model") +
