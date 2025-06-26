@@ -91,7 +91,7 @@ dis_box <- dist_sum |>
   ggplot(aes(x = value, y = sub_model, fill = fill)) +
   geom_boxplot(
     aes(colour = (fill == "True"), size = (fill == "True")),
-    position = ggstance::position_dodgev(height = 0.95, preserve = "single"),
+    position = ggstance::position_dodgev(height = ht = 0.95, preserve = "single"),
     outlier.size = 1, alpha = 0.7) +
   scale_fill_manual(
     values = c(

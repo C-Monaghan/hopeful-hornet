@@ -42,7 +42,7 @@ sim <- simulate_data(
 # Adding previous states
 data <- sim$data |> add_previous_status()
 
-# 5) Fit base, additive, multiplicative models ---------------------------------
+# 5. Fit base, additive, multiplicative models ---------------------------------
 models <- fit_markov_model(
   data         = data, 
   sample_sizes = c(100, 250, 1000, 5000), 
@@ -50,7 +50,7 @@ models <- fit_markov_model(
   parallel     = TRUE,
   seed         = 125)
 
-# 6) Extract β‑lists -----------------------------------------------------------
+# 6. Extract β‑lists -----------------------------------------------------------
 message("Extracting β values ... ")
 
 model_fits <- models[c("base_models", "additive_models", "multiplicative_models")]
@@ -63,7 +63,7 @@ model_coefs <- imap(model_fits, function(by_sub_blocks, parent) {
   })
 })
 
-# 7) Extract PIDs into a single tibble -----------------------------------------
+# 7. Extract PIDs into a single tibble -----------------------------------------
 pids_df <- imap(models$idv_trans, function(by_reps, size_label) {
   imap(by_reps, function(by_pid_list, rep) {
     tibble(
@@ -74,7 +74,7 @@ pids_df <- imap(models$idv_trans, function(by_reps, size_label) {
   })
 }) |> list_flatten() |> bind_rows()
 
-# 8) Resimulate from each β‑list in parallel -----------------------------------
+# 8. Resimulate from each β‑list in parallel -----------------------------------
 message("Resimulating data ... ")
 
 num_tasks <- model_coefs |> listr::list_flatten(max_depth = 3) |> length()
@@ -119,81 +119,29 @@ resimulation <- with_progress({
             error = function(e) {
               message("Error in simulation (skipping): ", e$message)
               return(NULL)
-              })
+            })
         }, .options = furrr_options(seed = TRUE))
       }, .options = furrr_options(seed = TRUE))
     }, .options = furrr_options(seed = TRUE))
   }, .options = furrr_options(seed = TRUE))
 })
 
-# Saving resimulation data (for later use) -------------------------------------
-message("Saving resimulation data ... ")
+# 9. Saving resimulation components --------------------------------------------
+message("Saving resimulation components ... ")
 
-saveRDS(
-  object = resimulation, 
-  file = file.path(this.dir(), "results/resim.RDS"))
-
-# 9) Compute individual transition matrices, filtered by PIDs ------------------
-message("Computing individual transitions ... ")
-
-num_tasks <- resimulation |> listr::list_flatten(max_depth = 3) |> length()
-
-indiv_transitions <- with_progress({
-  p <- progressor(steps = num_tasks)
-
-  future_imap(resimulation, function(by_sub_blocks, parent) {
-    future_imap(by_sub_blocks, function(by_sizes, sub_block) {
-      future_imap(by_sizes, function(by_data_list, size_label) {
-        future_map(by_data_list, function(df) {
-
-          p()
-
-          # Check if df exists
-          if(is.null(df)) return(NULL)
-
-          df <- tryCatch({
-            df |>
-              semi_join(pids_df, by = c("ID", "size_label", "rep"))
-          }, error = function(e) {
-            message("Joining error: ", e$message)
-            return(NULL)
-          })
-          
-          if(is.null(df) || nrow(df) == 0) return(NULL)
-
-          # Calculating individual transitions (with error handling)
-          tryCatch(
-            create_individual_transition_matrices(data = df),
-            error = function(e) {
-              message("Transition error: ", e$message)
-              return(NULL)
-            }
-          )
-        }, .options = furrr_options(seed = TRUE)) # end of by_data_list
-      }, .options = furrr_options(seed = TRUE)) # End of by_sizes
-    }, .options = furrr_options(seed = TRUE)) # End of by_sub_blocks
-  }, .options = furrr_options(seed = TRUE)) # End of resimulation
-})
-
-# Memory cleaning
-rm(model_fits, model_coefs, resimulation)
-
-# 10) Compute matrix‐distance metrics ------------------------------------------
-# Flatten all transitons into one tibble
-message("Computing matrix tibble ... ")
-
-transition_tibble <- extract_transition_pairs(
-  indiv_transitions = indiv_transitions, models = models)
-
-# Memory cleaning
-rm(data, indiv_transitions, models, pids_df, sim)
-
-# Resetting to sequential processing
 plan(sequential)
 
-# 11) Exporting ----------------------------------------------------------------
-message("Saving results ... ")
-
+# Resimulation
 saveRDS(
-  object = transition_tibble,
-  file = file.path(this.dir(), "results/transition_tibble.RDS"))
+  object = resimulation, 
+  file = file.path(this.dir(), "results/cache/resim.RDS"))
+
+# Models
+saveRDS(
+  object = models,
+  file = file.path(this.dir(), "results/cache/models.RDS"))
+
+# PIDs
+saveRDS(
+  object = pids_df,
+  file = file.path(this.dir(), "results/cache/pids.RDS"))
