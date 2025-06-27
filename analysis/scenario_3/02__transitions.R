@@ -18,19 +18,20 @@ pacman::p_load(
 plan(multisession, workers = parallel::detectCores() - 1)
 
 handlers(global = TRUE)
-handlers("txtprogressbar")
 
-# 3. Simulation functions ------------------------------------------------------
-func_files <- list.files(
-  path = here::here("R/"), pattern = "\\.R$", full.names = TRUE)
+handlers(handler_progress(
+  format = "[:bar] :percent (:elapsed elapsed, :eta remaining)",
+  clear = FALSE,
+  width = 60
+))
 
-walk(func_files, source)
+# 3. Functions -----------------------------------------------------------------
+source(here::here("R/create_individual_transition_matrices.R"))
 
 # 4. Reading in cached files ---------------------------------------------------
 message("Reading in data files ... ")
 
 resimulation   <- readRDS(file = file.path(this.dir(), "results/cache/resim.RDS"))
-models         <- readRDS(file = file.path(this.dir(), "results/cache/models.RDS"))
 pids_df        <- readRDS(file = file.path(this.dir(), "results/cache/pids.RDS"))
 
 # 5. Compute individual transition matrices, filtered by PIDs ------------------
@@ -75,25 +76,11 @@ indiv_transitions <- with_progress({
   }, .options = furrr_options(seed = TRUE)) # End of resimulation
 })
 
-# Memory cleaning
-rm(resimulation)
-
-# 6. Compute matrix‐distance metrics ------------------------------------------
-# Flatten all transitons into one tibble
-message("Computing matrix tibble ... ")
-
-transition_tibble <- extract_transition_pairs(
-  indiv_transitions = indiv_transitions, models = models)
-
-# Memory cleaning
-rm(indiv_transitions, models, pids_df)
-
-# Resetting to sequential processing
+# Reverting to sequential processing
 plan(sequential)
 
-# 7. Exporting ----------------------------------------------------------------
-message("Saving results ... ")
-
+# Saving individual transitions
 saveRDS(
-  object = transition_tibble,
-  file = file.path(this.dir(), "results/transition_tibble.RDS"))
+  object = indiv_transitions, 
+  file = here(this.dir(), "results/cache/indiv_trans.RDS"))
+

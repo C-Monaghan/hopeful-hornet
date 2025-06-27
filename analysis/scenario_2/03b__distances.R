@@ -21,13 +21,17 @@ path_scenario <- this.dir()
 transitions <- readRDS(here(path_scenario, "results/transition_tibble.RDS"))
 
 # 4. Setting up distances ------------------------------------------------------
-# Preallocate result list
-results_list <- vector("list", length = num_tasks)
-
 # Progress bar
 num_tasks <- nrow(transitions)
 
+# Set up txtProgressBar
 pb <- txtProgressBar(min = 0, max = num_tasks, style = 3)
+progress_count <- 0
+progress_lock <- new.env()
+progress_lock$val <- 0
+
+# Preallocate result list
+results_list <- vector("list", length = num_tasks)
 
 # 5. Calculating matrix distances ----------------------------------------------
 for (i in seq_len(num_tasks)) {
