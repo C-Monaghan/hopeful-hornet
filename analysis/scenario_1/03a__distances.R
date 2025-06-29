@@ -43,8 +43,8 @@ message("Computing matrix tibble ... ")
 obs_path <- here(this.dir(), "results/cache")
 
 # Parallel method (ensure models is available globally, which it will be)
-# transition_tibble <- extract_transition_parallel(
-#   indiv_transitions = indiv_transitions, obs_path = obs_path)
+transition_tibble <- extract_transition_parallel(
+  indiv_transitions = indiv_transitions, obs_trans = obs_trans)
 
 # Sequential method (I'm too impatient)
 transition_tibble <- extract_transition_pairs(

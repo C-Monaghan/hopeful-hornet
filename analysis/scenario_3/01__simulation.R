@@ -36,7 +36,7 @@ walk(func_files, source)
 
 # 4. Simulating "true" data ----------------------------------------------------
 sim <- simulate_data(
-  n_subjects = 10000, n_waves = 3, scenario = scenario, 
+  n_subjects = 2000, n_waves = 3, scenario = scenario, 
   resim = FALSE, betas = NULL, seed = 123, verbose = TRUE)
 
 # Adding previous states
@@ -45,8 +45,8 @@ data <- sim$data |> add_previous_status()
 # 5. Fit base, additive, multiplicative models ---------------------------------
 models <- fit_markov_model(
   data         = data, 
-  sample_sizes = c(100, 250, 1000, 5000), 
-  n_reps       = 200,
+  sample_sizes = c(100, 250, 1000), 
+  n_reps       = 1,
   parallel     = TRUE,
   seed         = 125)
 

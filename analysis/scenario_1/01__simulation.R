@@ -46,7 +46,7 @@ data <- sim$data |> add_previous_status()
 models <- fit_markov_model(
   data         = data, 
   sample_sizes = c(100, 250, 1000, 5000), 
-  n_reps       = 200,
+  n_reps       = 1,
   parallel     = TRUE,
   seed         = 125)
 

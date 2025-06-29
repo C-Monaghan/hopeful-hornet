@@ -1,4 +1,4 @@
-extract_transition_parallel <- function(indiv_transitions, obs_path) {
+extract_transition_parallel <- function(indiv_transitions, obs_trans) {
   # Estimate total number of reps to use as progress steps
   num_reps <- sum(map_int(
     indiv_transitions, ~ sum(map_int(.x, ~ sum(map_int(.x, length))))

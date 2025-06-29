@@ -16,9 +16,7 @@ Rcpp::sourceCpp(file = here("R/compare_matrices.cpp"))
 # 3. Reading in transition data ------------------------------------------------
 message("Reading in data ... ")
 
-path_scenario <- this.dir()
-
-transitions <- readRDS(here(path_scenario, "results/transition_tibble.RDS"))
+transitions <- readRDS(here(this.dir(), "results/transition_tibble.RDS"))
 
 # 4. Setting up distances ------------------------------------------------------
 # Progress bar
@@ -56,7 +54,7 @@ results_dt <- data.table::rbindlist(results_list, fill = TRUE, idcol = "row_id")
 # Merge with metadata
 metadata <- transitions |>
   dplyr::select(-c(obs_mat, sim_mat)) |>
-  dplyr::mutate(row_id = row_number())
+  dplyr::mutate(row_id = dplyr::row_number())
 
 # Join into one dataset
 matrix_distances <- metadata |> 
@@ -68,4 +66,4 @@ message("Saving results ... ")
 
 fst::write.fst(
   x = matrix_distances, 
-  path = here(path_scenario, "results/matrix_distances.fst"))
+  path = here(this.dir(), "results/matrix_distances.fst"))
