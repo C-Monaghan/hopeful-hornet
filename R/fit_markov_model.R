@@ -283,8 +283,6 @@ fit_markov_model <- function(
     
     for (i in seq_along(sample_sizes)) {
       
-      # message("Processing sample size ", sample_sizes[i], " (", i, "/", length(sample_sizes), ")")
-      
       pb$tick()
       n <- sample_sizes[i]
       
