@@ -1,7 +1,5 @@
 # Matrix distance calculation (scenario 3)
 
-rm(list = ls())
-
 # 1. Packages ------------------------------------------------------------------
 pacman::p_load(
   progressr,
@@ -11,7 +9,7 @@ pacman::p_load(
 
 # 2. Functions -----------------------------------------------------------------
 # Using a C++ function instead of an R one
-Rcpp::sourceCpp(file = here("R/compare_matrices.cpp"))
+Rcpp::sourceCpp(file = here::here("R/compare_matrices.cpp"))
 
 # 3. Reading in transition data ------------------------------------------------
 message("Reading in data ... ")

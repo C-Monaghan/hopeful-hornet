@@ -1,7 +1,4 @@
-# Scenario 2 -------------------------------------------------------------------
-rm(list = ls())
-
-message("Setting up ...")
+# Making distance plots - scenario 2 
 
 # Packages ---------------------------------------------------------------------
 pacman::p_load(

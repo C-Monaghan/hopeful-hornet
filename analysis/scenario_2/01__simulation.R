@@ -2,8 +2,6 @@
 # Assuming an additive previous response effect
 # ------------------------------------------------------------------------------
 
-rm(list = ls()) # To annoy Rafael
-
 # 1. Loading packages ----------------------------------------------------------
 pacman::p_load(
   dplyr,
@@ -51,8 +49,8 @@ data <- sim$data |> add_previous_status()
 models <- fit_markov_model(
   data         = data, 
   sample_sizes = c(100, 250, 1000, 5000), 
-  n_reps       = 1,
-  parallel     = TRUE,
+  n_reps       = 200,
+  parallel     = FALSE,
   seed         = 125)
 
 # 6. Extract β‑lists -----------------------------------------------------------
@@ -96,21 +94,17 @@ message("Saving resimulation components ... ")
 
 plan(sequential)
 
+# # Resimulation
 saveRDS(
   object = resimulation,
-  file = file.path(this.dir(), "results/cache/resim_test.RDS"))
+  file = file.path(this.dir(), "results/cache/resim.RDS"))
 
-# # Resimulation
-# saveRDS(
-#   object = resimulation, 
-#   file = file.path(this.dir(), "results/cache/resim.RDS"))
-# 
-# # Models
-# saveRDS(
-#   object = models,
-#   file = file.path(this.dir(), "results/cache/models.RDS"))
-# 
-# # PIDs
-# saveRDS(
-#   object = pids_df,
-#   file = file.path(this.dir(), "results/cache/pids.RDS"))
+# Models
+saveRDS(
+  object = models$idv_trans,
+  file = file.path(this.dir(), "results/cache/obs_trans.RDS"))
+
+# PIDs
+saveRDS(
+  object = pids_df,
+  file = file.path(this.dir(), "results/cache/pids.RDS"))

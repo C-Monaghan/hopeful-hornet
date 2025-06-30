@@ -1,7 +1,4 @@
-# Create matrix distance tibble
-# Scenario 1
-
-rm(list = ls())
+# Create matrix distance tibble - scenario 1
 
 # 1. Loading packages ----------------------------------------------------------
 pacman::p_load(
@@ -39,14 +36,7 @@ obs_trans         <- readRDS(file = file.path(this.dir(), "results/cache/obs_tra
 # Flatten all transitons into one tibble
 message("Computing matrix tibble ... ")
 
-# Where is obs_trans located
-obs_path <- here(this.dir(), "results/cache")
-
-# Parallel method (ensure models is available globally, which it will be)
-transition_tibble <- extract_transition_parallel(
-  indiv_transitions = indiv_transitions, obs_trans = obs_trans)
-
-# Sequential method (I'm too impatient)
+# Sequential method - cannot get parallel to work for me
 transition_tibble <- extract_transition_pairs(
   indiv_transitions = indiv_transitions, obs_trans = obs_trans)
 

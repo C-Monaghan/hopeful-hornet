@@ -2,8 +2,6 @@
 # Assuming a multiplicative previous response effect
 # ------------------------------------------------------------------------------
 
-rm(list = ls()) # To annoy Rafael
-
 # 1. Loading packages ----------------------------------------------------------
 pacman::p_load(
   dplyr,
@@ -36,7 +34,7 @@ walk(func_files, source)
 
 # 4. Simulating "true" data ----------------------------------------------------
 sim <- simulate_data(
-  n_subjects = 2000, n_waves = 3, scenario = scenario, 
+  n_subjects = 10000, n_waves = 3, scenario = scenario, 
   resim = FALSE, betas = NULL, seed = 123, verbose = TRUE)
 
 # Adding previous states
@@ -45,9 +43,9 @@ data <- sim$data |> add_previous_status()
 # 5. Fit base, additive, multiplicative models ---------------------------------
 models <- fit_markov_model(
   data         = data, 
-  sample_sizes = c(100, 250, 1000), 
-  n_reps       = 1,
-  parallel     = TRUE,
+  sample_sizes = c(100, 250, 1000, 5000), 
+  n_reps       = 200,
+  parallel     = FALSE,
   seed         = 125)
 
 # 6. Extract β‑lists -----------------------------------------------------------
@@ -98,8 +96,8 @@ saveRDS(
 
 # Models
 saveRDS(
-  object = models,
-  file = file.path(this.dir(), "results/cache/models.RDS"))
+  object = models$idv_trans,
+  file = file.path(this.dir(), "results/cache/obs_trans.RDS"))
 
 # PIDs
 saveRDS(

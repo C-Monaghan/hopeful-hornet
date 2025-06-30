@@ -2,8 +2,6 @@
 # Assuming no previous response effect
 # ------------------------------------------------------------------------------
 
-rm(list = ls()) # To annoy Rafael
-
 # 1. Loading packages ----------------------------------------------------------
 pacman::p_load(
   dplyr,
@@ -26,7 +24,12 @@ scenario <- case_when(
 plan(multisession, workers = parallel::detectCores() - 1)
 
 handlers(global = TRUE)
-handlers("txtprogressbar")
+
+handlers(handler_progress(
+  format = "[:bar] :percent (:elapsed elapsed, :eta remaining)",
+  clear = FALSE,
+  width = 60
+))
 
 # 3. Simulation functions ------------------------------------------------------
 func_files <- list.files(
@@ -46,8 +49,8 @@ data <- sim$data |> add_previous_status()
 models <- fit_markov_model(
   data         = data, 
   sample_sizes = c(100, 250, 1000, 5000), 
-  n_reps       = 1,
-  parallel     = TRUE,
+  n_reps       = 200,
+  parallel     = FALSE,
   seed         = 125)
 
 # 6. Extract β‑lists -----------------------------------------------------------
@@ -79,52 +82,12 @@ message("Resimulating data ... ")
 
 num_tasks <- model_coefs |> listr::list_flatten(max_depth = 3) |> length()
 
-resimulation <- with_progress({
-  p <- progressor(steps = num_tasks)
-  
-  future_imap(model_coefs, function(by_sub_block, parent) {
-    # Parent is named
-    #   - base_models           = 1
-    #   - additive_models       = 2
-    #   - multiplicative_models = 3
-    future_imap(by_sub_block, function(by_size, sub_block) {
-      # sub_block is named
-      #   - null_models,
-      #   - red_1_models,
-      #   - red_2_models,
-      #   - true_models,
-      #   - of_models
-      future_imap(by_size, function(by_beta_lists, size) {
-        # size_label is named
-        #   - n_100,
-        #   - n_250,
-        #   - n_1000
-        future_map2(by_beta_lists, seq_along(by_beta_lists), function(betas, reps) {
-          
-          p()
-          
-          tryCatch(
-            simulate_data(
-              n_subjects = 10000, n_waves = 3, scenario = scenario, 
-              resim = TRUE, og_data = sim$data, betas = betas, 
-              seed = 123, verbose = FALSE)$data |>
-              mutate(
-                parent_block = parent,
-                sub_block = sub_block,
-                size_label = size,
-                rep = as.character(reps)
-              ) |>
-              add_previous_status(),
-            
-            error = function(e) {
-              message("Error in simulation (skipping): ", e$message)
-              return(NULL)
-            })
-        }, .options = furrr_options(seed = TRUE))
-      }, .options = furrr_options(seed = TRUE))
-    }, .options = furrr_options(seed = TRUE))
-  }, .options = furrr_options(seed = TRUE))
-})
+resimulation <- resimulate_data(
+  model_coefs = model_coefs,
+  sim = sim,
+  scenario = scenario,
+  num_tasks = num_tasks
+)
 
 # 9. Saving resimulation components --------------------------------------------
 message("Saving resimulation components ... ")
@@ -138,8 +101,8 @@ saveRDS(
 
 # Models
 saveRDS(
-  object = models,
-  file = file.path(this.dir(), "results/cache/models.RDS"))
+  object = models$idv_trans,
+  file = file.path(this.dir(), "results/cache/obs_trans.RDS"))
 
 # PIDs
 saveRDS(

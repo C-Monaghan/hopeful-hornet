@@ -1,8 +1,6 @@
 # Calculating original and estimated transitions
 # Scenario 3
 
-rm(list = ls())
-
 # 1. Loading packages ----------------------------------------------------------
 pacman::p_load(
   dplyr,

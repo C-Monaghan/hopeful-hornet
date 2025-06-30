@@ -1,7 +1,4 @@
-# Calculating original and estimated transitions
-# Scenario 1
-
-rm(list = ls())
+# Calculating original and estimated transitions - for scenario 1
 
 # 1. Loading packages ----------------------------------------------------------
 pacman::p_load(
@@ -18,7 +15,12 @@ pacman::p_load(
 plan(multisession, workers = parallel::detectCores() - 1)
 
 handlers(global = TRUE)
-handlers("txtprogressbar")
+
+handlers(handler_progress(
+  format = "[:bar] :percent (:elapsed elapsed, :eta remaining)",
+  clear = FALSE,
+  width = 60
+))
 
 # 3. Functions -----------------------------------------------------------------
 source(here::here("R/create_individual_transition_matrices.R"))
