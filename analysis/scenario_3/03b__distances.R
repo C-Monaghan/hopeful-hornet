@@ -11,6 +11,8 @@ pacman::p_load(
 # Using a C++ function instead of an R one
 Rcpp::sourceCpp(file = here::here("R/compare_matrices.cpp"))
 
+source(here::here("R/pad_matrix_to_3x3.R"))
+
 # 3. Reading in transition data ------------------------------------------------
 message("Reading in data ... ")
 
@@ -27,8 +29,8 @@ results_list <- vector("list", length = num_tasks)
 
 # 5. Calculating matrix distances ----------------------------------------------
 for (i in seq_len(num_tasks)) {
-  obs <- transitions$obs_mat[[i]]
-  sim <- transitions$sim_mat[[i]]
+  obs <- transitions$obs_mat[[i]] |> pad_matrix_to_3x3()
+  sim <- transitions$sim_mat[[i]] |> pad_matrix_to_3x3()
   
   # Using C++ code
   results_list[[i]] <- tryCatch(
@@ -44,6 +46,11 @@ for (i in seq_len(num_tasks)) {
 }
 
 close(pb) # Close progress bar
+
+# Saving in case of down steam breaking
+saveRDS(
+  object = results_list, 
+  file = file.path(this.dir(), "results/cache/results_list.RDS"))
 
 # 6. Post-processing -----------------------------------------------------------
 # Bind rows
@@ -64,4 +71,4 @@ message("Saving results ... ")
 
 fst::write.fst(
   x = matrix_distances, 
-  path = here(this.dir(), "results/matrix_distances.fst"))
+  path = file.path(this.dir(), "results/matrix_distances.fst"))

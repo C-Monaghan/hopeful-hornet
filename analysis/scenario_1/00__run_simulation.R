@@ -13,9 +13,9 @@ pacman::p_load(
 
 # Define Scripts ---------------------------------------------------------------
 scripts <- c(
-  "01__simulation.R",
-  "02__transitions.R",
-  "03a__distances.R",
+  # "01__simulation.R",
+  # "02__transitions.R",
+  # "03a__distances.R",
   "03b__distances.R",
   "04__plotting.R"
 )
