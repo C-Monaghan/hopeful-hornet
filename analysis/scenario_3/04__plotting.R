@@ -44,7 +44,7 @@ message("Reading in data ... ")
 
 # ~ 56 million rows (ooof...)
 distances <- fst::read.fst(
-  path = here::here(path_scenario, "results/matrix_distances_test.fst"), 
+  path = here::here(path_scenario, "results/matrix_distances.fst"), 
   as.data.table = TRUE) |> 
   tidy_metrics()
 
