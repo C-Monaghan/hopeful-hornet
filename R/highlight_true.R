@@ -3,7 +3,7 @@ highlight_true <- function(distances, true_model = NULL, usage = NULL) {
     distances |>
       mutate(
         fill = case_when(
-          parent_block == paste0(true_model, " Models") & sub_model == "True Model" ~ "True",
+          parent_block == paste0(true_model, " Models") & sub_block == "True Model" ~ "True",
           parent_block == "Base Models" ~ "Base Models",
           parent_block == "Additive Models" ~ "Additive Models",
           parent_block == "Multiplicative Models" ~  "Multiplicative Models"
@@ -16,12 +16,12 @@ highlight_true <- function(distances, true_model = NULL, usage = NULL) {
       distances |>
       mutate(
         fill = case_when(
-          parent_block == paste0(true_model, " Models") & sub_model == "True Model" ~ "True Model",
-          sub_model == "Null Model" ~ "Null Model",
-          sub_model == "Reduced Model 1" ~ "Reduced Model 1",
-          sub_model == "Reduced Model 2" ~ "Reduced Model 2",
-          sub_model == "True Model" ~ "Other",
-          sub_model == "Overfit Model" ~ "Overfit Model"
+          parent_block == paste0(true_model, " Models") & sub_block == "True Model" ~ "True Model",
+          sub_block == "Null Model" ~ "Null Model",
+          sub_block == "Reduced Model 1" ~ "Reduced Model 1",
+          sub_block == "Reduced Model 2" ~ "Reduced Model 2",
+          sub_block == "True Model" ~ "Other",
+          sub_block == "Overfit Model" ~ "Overfit Model"
         ),
         fill = factor(
           fill,

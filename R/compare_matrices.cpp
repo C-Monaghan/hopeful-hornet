@@ -44,9 +44,12 @@ DataFrame compare_matrices_rcpp(const arma::mat& Obs,
   double rmse = std::sqrt(sum_sq / n);
   
   // Pearson correlation formula (manual implementation using sums)
-  double corr = (n * sum_xy - sum_x * sum_y) /
-    std::sqrt((n * sum_x2 - sum_x*sum_x) *
-      (n * sum_y2 - sum_y*sum_y));
+  double denom_corr = std::sqrt((n * sum_x2 - sum_x * sum_x) *
+                                (n * sum_y2 - sum_y * sum_y));
+  double corr = NA_REAL;
+  if (denom_corr != 0 && !std::isnan(denom_corr) && !std::isinf(denom_corr)) {
+    corr = (n * sum_xy - sum_x * sum_y) / denom_corr;
+  }
   
   // Kullback–Leibler divergence (approximated): sum of x * log(x / y)
   double eps  = 1e-10;
@@ -62,7 +65,7 @@ DataFrame compare_matrices_rcpp(const arma::mat& Obs,
         max_abs,        // Maximum absolute error
         sum_abs/n,      // Mean absolute error
         rmse,           // Root mean square error
-        1 - corr,       // 1 - Pearson correlation (interpreted as dissimilarity)
+        (NumericVector::is_na(corr) ? NA_REAL : 1 - corr),       // 1 - Pearson correlation (interpreted as dissimilarity)
         kl              // KL divergence
         )
   );

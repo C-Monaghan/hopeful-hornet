@@ -5,7 +5,7 @@ resimulate_data <- function(model_coefs, sim, scenario, num_tasks) {
   
   # Use a text-based progress bar (works in Jobs pane)
   handlers(handler_txtprogressbar(enable = TRUE))
-    
+  
   with_progress({
     p <- progressor(steps = num_tasks)
     
@@ -39,8 +39,7 @@ resimulate_data <- function(model_coefs, sim, scenario, num_tasks) {
       }, .options = furrr_options(seed = TRUE))
     }, .options = furrr_options(seed = TRUE))
   })
-    
-    return(results)
+  
+  return(results)
 }
-
 

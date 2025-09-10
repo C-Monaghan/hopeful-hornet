@@ -62,7 +62,7 @@ simulate_data <- function(
   
   # If scenario 4 but no betas supplied, throw an error:
   if (resim == TRUE && is.null(betas)) {
-    stop("`resum = TRUE` requires you to pass a non‐NULL `betas` argument.")
+    stop("`resim = TRUE` requires you to pass a non‐NULL `betas` argument.")
   }
 
   if(!is.null(seed)) {
