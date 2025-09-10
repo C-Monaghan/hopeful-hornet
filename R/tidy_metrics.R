@@ -9,18 +9,19 @@ tidy_metrics <- function(metrics) {
   metrics[, parent_block := str_replace(parent_block, "_", " ")]
   metrics[, parent_block := str_to_title(parent_block)]
   
-  metrics[, sub_model := fcase(
-    sub_model == "null_models", "Null Model",
-    sub_model == "red_1_models", "Reduced Model 1",
-    sub_model == "red_2_models", "Reduced Model 2",
-    sub_model == "true_models", "True Model",
-    sub_model == "of_models", "Overfit Model",
-    default = sub_model
+  metrics[, sub_block := fcase(
+    sub_block == "null_models", "Null Model",
+    sub_block == "red_1_models", "Reduced Model 1",
+    sub_block == "red_2_models", "Reduced Model 2",
+    sub_block == "true_models", "True Model",
+    sub_block == "of_models", "Overfit Model",
+    default = sub_block
   )]
   
   metrics[, size_label := str_replace(size_label, "n_", "n = ")]
-  metrics[, wave := str_replace(wave, "w_", "Wave ")]
-  metrics[, wave := str_replace(wave, "_", " to ")]
+  # metrics[, wave := str_replace(wave, "w_", "Wave ")]
+  metrics[, wave := str_replace(wave, "-", " to ")]
+  metrics[, wave := paste0("Wave ", wave)]
   
   metrics[, metric := fcase(
     metric == "Frobenius", "Frobenius Distance",
@@ -30,6 +31,8 @@ tidy_metrics <- function(metrics) {
     metric == "RMSE", "Root Mean Square Error",
     metric == "Correlation", "Correlation Distance",
     metric == "KL", "Kullback-Leibler Divergence",
+    metric == "aic", "AIC",
+    metric == "bic", "BIC",
     default = metric
   )]
   
@@ -39,8 +42,8 @@ tidy_metrics <- function(metrics) {
     levels = c("Base Models", "Additive Models", "Multiplicative Models")
   )]
   
-  metrics[, sub_model := factor(
-    sub_model,
+  metrics[, sub_block := factor(
+    sub_block,
     levels = c("Null Model", "Reduced Model 1", "Reduced Model 2", 
                "True Model", "Overfit Model")
   )]
@@ -60,7 +63,7 @@ tidy_metrics <- function(metrics) {
     levels = c("Frobenius Distance", "Manhattan Distance",
                "Max Difference", "Mean Absolute Difference",
                "Root Mean Square Error", "Correlation Distance",
-               "Kullback-Leibler Divergence")
+               "Kullback-Leibler Divergence", "AIC", "BIC")
   )]
   
   return(metrics)
