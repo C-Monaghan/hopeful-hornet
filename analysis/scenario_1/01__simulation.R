@@ -50,7 +50,7 @@ models <- fit_markov_model(
   data         = data, 
   sample_sizes = c(100, 250, 1000, 5000), 
   n_reps       = 200,
-  parallel     = FALSE,
+  parallel     = TRUE,
   seed         = 125)
 
 # 6. Extract β‑lists -----------------------------------------------------------
@@ -99,10 +99,15 @@ saveRDS(
   object = resimulation, 
   file = file.path(this.dir(), "results/cache/resim.RDS"))
 
-# Models
+# Models (obs_trans)
 saveRDS(
   object = models$idv_trans,
   file = file.path(this.dir(), "results/cache/obs_trans.RDS"))
+
+# Models (fits)
+saveRDS(
+  object = model_fits,
+  file = file.path(this.dir(), "results/cache/models.RDS"))
 
 # PIDs
 saveRDS(

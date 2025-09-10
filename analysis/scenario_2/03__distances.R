@@ -7,37 +7,36 @@ pacman::p_load(
   furrr,
   progressr,
   this.path,
-  here
+  here,
+  nnet
 )
 
 # 2. Functions -----------------------------------------------------------------
 # Using a C++ function instead of an R one
 Rcpp::sourceCpp(file = here::here("R/compare_matrices.cpp"))
 
-source(here::here("R/pad_matrix_to_3x3.R"))
-
-# 3. Reading in transition data ------------------------------------------------
+# 3. Reading in data files -----------------------------------------------------
 message("Reading in data ... ")
 
-transitions <- readRDS(here(this.dir(), "results/transition_tibble.RDS"))
+transitions    <- readRDS(here(this.dir(), "results/transition_tibble.RDS"))
+models         <- readRDS(here(this.dir(), "results/cache/models.RDS"))
+
+# Only interested in the fits
+models         <- models[c("base_models", "additive_models", "multiplicative_models")]
 
 # 4. Setting up distances ------------------------------------------------------
 # Progress bar
 num_tasks <- nrow(transitions)
 
-# Set up txtProgressBar
 pb <- txtProgressBar(min = 0, max = num_tasks, style = 3)
-progress_count <- 0
-progress_lock <- new.env()
-progress_lock$val <- 0
 
 # Preallocate result list
 results_list <- vector("list", length = num_tasks)
 
 # 5. Calculating matrix distances ----------------------------------------------
 for (i in seq_len(num_tasks)) {
-  obs <- transitions$obs_mat[[i]] |> pad_matrix_to_3x3()
-  sim <- transitions$sim_mat[[i]] |> pad_matrix_to_3x3()
+  obs <- transitions$obs_mat[[i]]
+  sim <- transitions$sim_mat[[i]]
   
   # Using C++ code
   results_list[[i]] <- tryCatch(
@@ -56,7 +55,7 @@ close(pb) # Close progress bar
 
 # Saving in case of down steam breaking
 saveRDS(
-  object = results_list, 
+  object = results_list,
   file = file.path(this.dir(), "results/cache/results_list.RDS"))
 
 # 6. Post-processing -----------------------------------------------------------
@@ -73,9 +72,43 @@ matrix_distances <- metadata |>
   dplyr::left_join(results_dt, by = "row_id") |>
   dplyr::select(-row_id)
 
+# Temporarily saving matrix distances
+saveRDS(
+  object = matrix_distances,
+  file = file.path(this.dir(), "results/cache/matrix_distances_temp.RDS"))
+
+# Getting AIC and BIC data from models
+model_diagnostics <- imap_dfr(models, function(by_sub_block, parent) {
+  imap_dfr(by_sub_block, function(by_size, sub_block) {
+    imap_dfr(by_size, function(by_rep, size) {
+      imap_dfr(by_rep, function(model, rep_index) {
+        tibble(
+          parent_block = parent,
+          sub_block = sub_block,
+          size_label = size,
+          rep = as.character(rep_index),
+          aic = AIC(model),
+          bic = BIC(model)
+        )
+      })
+    })
+  })
+})
+
+# Temporarily saving model diagnostics
+saveRDS(
+  object = model_diagnostics,
+  file = file.path(this.dir(), "results/cache/model_diagnostics_temp.RDS"))
+
+# Merging AIC / BIC into metric data
+matrix_distances <- matrix_distances |>
+  tidyr::pivot_wider(names_from = metric, values_from = value) |>
+  left_join(model_diagnostics, by = c("parent_block", "sub_block", "size_label", "rep")) |>
+  tidyr::pivot_longer(cols = c(Frobenius:bic), names_to = "metric", values_to = "value")
+
 # 7. Exporting -----------------------------------------------------------------
 message("Saving results ... ")
 
 fst::write.fst(
   x = matrix_distances, 
-  path = file.path(this.dir(), "results/matrix_distances.fst"))
+  path = file.path(this.dir(), "results/matrix_distances_2.fst"))

@@ -1,4 +1,4 @@
-# Scenario 1 -------------------------------------------------------------------
+# Making distance plots - scenario 1
 
 # Packages ---------------------------------------------------------------------
 pacman::p_load(
@@ -6,7 +6,8 @@ pacman::p_load(
   tidyr,
   stringr,
   data.table,
-  ggplot2
+  ggplot2,
+  nnet
 )
 
 # Set theme --------------------------------------------------------------------
@@ -18,7 +19,7 @@ theme_set(
       axis.text.y          = element_text(face = "bold"),
       axis.text.x          = element_text(angle = 45, hjust = 1),
       strip.background     = element_rect(fill = "#F0F0F0", colour = NA),
-      strip.text           = element_text(face = "bold", size = 11),
+      strip.text           = element_text(face = "bold", size = 10),
       panel.grid.major.y   = element_blank(),
       panel.grid.minor     = element_blank(),
       legend.position      = "bottom",
@@ -42,16 +43,90 @@ true_model <- case_when(
 
 message("Reading in data ... ")
 
-# ~ 56 million rows (ooof...)
+# ~ 266 million rows (ooof...)
 distances <- fst::read.fst(
   path = here::here(path_scenario, "results/matrix_distances.fst"), 
   as.data.table = TRUE) |> 
   tidy_metrics()
 
+# Model info
+models <- readRDS(here::here(path_scenario, "results/cache/models.RDS"))
+
+# Getting AIC and BIC data from models -----------------------------------------
+message("Joining AIC and BIC ... ")
+
+model_diagnostics <- rbindlist(lapply(names(models), function(parent) {
+  by_sub_block <- models[[parent]]
+  rbindlist(lapply(names(by_sub_block), function(sub_block) {
+    by_size <- by_sub_block[[sub_block]]
+    rbindlist(lapply(names(by_size), function(size) {
+      by_rep <- by_size[[size]]
+      rbindlist(lapply(seq_along(by_rep), function(rep_index) {
+        model <- by_rep[[rep_index]]
+        data.table(
+          parent_block = parent,
+          sub_block = sub_block,
+          size_label = size,
+          rep = as.character(rep_index),
+          Aic = AIC(model),
+          Bic = BIC(model)
+        )
+      }))
+    }))
+  }))
+}), use.names = TRUE, fill = TRUE) |>
+  tibble::as_tibble() |>
+  mutate(
+    parent_block = case_when(
+      parent_block == "base_models" ~ "Base Models",
+      parent_block == "additive_models" ~ "Additive Models",
+      parent_block == "multiplicative_models" ~ "Multiplicative Models"),
+    sub_block = case_when(
+      sub_block == "null_models" ~ "Null Model",
+      sub_block == "red_1_models" ~ "Reduced Model 1",
+      sub_block == "red_2_models" ~ "Reduced Model 2",
+      sub_block == "true_models" ~ "True Model",
+      sub_block == "of_models" ~ "Overfit Model"),
+    size_label = stringr::str_replace(size_label, "_", " = "))
+
+# Adding in AIC and BIC to metric data
+distances <- distances |>
+  tibble::as_tibble() |>
+  tidyr::pivot_wider(names_from = "metric", values_from = "value") |>
+  left_join(model_diagnostics, by = c("parent_block", "sub_block", "size_label", "rep")) |>
+  tidyr::pivot_longer(
+    cols = c(`Frobenius Distance`:Bic),
+    names_to = "metric",
+    values_to = "value")
+
+# Refactorising ----------------------------------------------------------------
+message("Refactorising ... ")
+
+distances <- distances |>
+  mutate(
+    parent_block = factor(
+      parent_block, 
+      levels = c("Base Models", "Additive Models", "Multiplicative Models")),
+    sub_block = factor(
+      sub_block, 
+      levels = c("Null Model", "Reduced Model 1", "Reduced Model 2", 
+                 "True Model", "Overfit Model")),
+    size_label = factor(
+      size_label,
+      levels = c("n = 100", "n = 250", "n = 1000", "n = 5000")),
+    metric = factor(
+      metric, 
+      levels = c("Frobenius Distance", "Manhattan Distance", "Max Difference", 
+                 "Mean Absolute Difference", "Root Mean Square Error", 
+                 "Correlation Distance", "Kullback-Leibler Divergence", 
+                 "Aic", "Bic"))
+  ) |>
+  as.data.table()
+
 message("Summarising data ... ")
 
 # Grouping and summarizing metrics
-dist_sum <- distances[, .(value = mean(value)), by = .(parent_block, sub_model, size_label, rep, wave, metric)] |>
+dist_sum <- distances[, .(value = mean(value)), by = .(parent_block, sub_block, size_label, rep, wave, metric)] |>
   tibble::as_tibble() |>
   filter(metric != "Kullback-Leibler Divergence")
 
@@ -64,7 +139,7 @@ message("Finding best model ...")
 # Summarizing best model
 best_models <- dist_sum |>
   # Collapse the wave column
-  group_by(parent_block, sub_model, size_label, rep, metric) |>
+  group_by(parent_block, sub_block, size_label, rep, metric) |>
   summarise(value = mean(value), .groups = "drop") |> 
   # Compute by metric (probably unnecessary ... )
   split(~ metric) |>
@@ -76,7 +151,7 @@ best_models <- dist_sum |>
       ungroup() |>
       # Which model had the lowest metric
       mutate(lowest = ifelse(winning == 1, TRUE, FALSE)) |>
-      group_by(parent_block, sub_model, size_label, metric) |>
+      group_by(parent_block, sub_block, size_label, metric) |>
       # Count each win and summarise
       summarise(n_lowest = sum(lowest), .groups = "drop") |>
       mutate(prop = n_lowest / 200)
@@ -87,7 +162,7 @@ message("Plotting ... ")
 
 # Plotting ---------------------------------------------------------------------
 dis_box <- dist_sum |>
-  ggplot(aes(x = value, y = sub_model, fill = fill)) +
+  ggplot(aes(x = value, y = sub_block, fill = fill)) +
   geom_boxplot(
     aes(colour = (fill == "True"), size = (fill == "True")),
     position = ggstance::position_dodgev(height = 0.95, preserve = "single"),
@@ -110,7 +185,10 @@ dis_box <- dist_sum |>
     y        =  NULL,
     fill     =  NULL
   ) +
-  facet_grid(size_label ~ metric, scales = "free_x")
+  facet_grid(size_label ~ metric, scales = "free", labeller = labeller(
+    metric = c("Aic" = "Akaike Information Criterion",
+               "Bic" = "Bayesian Information Criterion")
+  ))
 
 dis_bar <- best_models |>
   ggplot(aes(x = parent_block, y = prop, fill = fill)) +
@@ -133,7 +211,10 @@ dis_bar <- best_models |>
     x = "Model Type",
     y = "Proportion of Repetitions as best", 
     fill = "Sub Model") +
-  facet_grid(size_label ~ metric, space = "free")
+  facet_grid(size_label ~ metric, space = "free", labeller = labeller(
+    metric = c("Aic" = "Akaike Information Criterion",
+               "Bic" = "Bayesian Information Criterion")
+  ))
 
 message("Exporting data ... ")
 
@@ -163,4 +244,3 @@ cowplot::save_plot(
   plot = dis_bar,
   base_height = 10, 
   base_width = 25)
-
