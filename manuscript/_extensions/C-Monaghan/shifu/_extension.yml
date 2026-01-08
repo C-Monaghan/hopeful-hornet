@@ -1,0 +1,38 @@
+title: Shifu
+author: Cormac Monaghan
+version: 1.0.0
+quarto-required: ">=1.8.0"
+contributes:
+  formats:
+
+    # Shared between files
+    common:
+      date-format: full
+
+    # Typst
+    typst:
+      template-partials:
+        - typ/typst-template.typ
+        - typ/typst-show.typ
+        - typ/biblio.typ
+      main-font:
+        - Crimson
+      linestretch: 1
+      linkcolor: "#800000"
+      biblio-title: References
+      block-author: true # Should the authors be listed in a block
+
+    # Word document
+    docx:
+      reference-doc: "styles/reference.docx"
+      knitr:
+        opts_chunk:
+          dev: "ragg_png"
+          dpi: 300
+          out.width: "80%"
+
+    # HTML
+    html:
+      theme: styles/pretty.scss
+      template-partials:
+        - "partials/title-block.html"

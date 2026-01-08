@@ -1,0 +1,50 @@
+project:
+  title: "Manuscript"
+  output-dir: "output"
+
+  render:
+    - "manuscript.qmd"
+
+language:
+  title-block-published: Latest version
+  related-formats-title: Other formats
+
+format:
+  # Nice HTML output
+  html:
+    toc: true
+    toc-depth: 3
+    include-in-header:
+      - text: |
+          <style type="text/css">
+          h2.hide {
+            display: none;
+          }
+          </style>
+    theme:
+      - zephyr
+      - html/custom.scss
+    shift-heading-level-by: 1
+
+    citeproc: false
+    filters:
+      - at: pre-quarto
+        path: _extensions/andrewheiss/wordcount/citeproc.lua
+      - at: pre-quarto
+        path: _extensions/andrewheiss/wordcount/wordcount.lua
+
+    format-links:
+      - html
+      - format: shifu-typst
+        text: Typst
+        icon: file-pdf
+    knitr:
+      opts_chunk:
+        dev: "ragg_png"
+        dpi: 300
+
+  # Typst
+  shifu-typst:
+    block-author: false
+    include-in-header:
+      - text: '#import "@preview/mitex:0.2.4": *'

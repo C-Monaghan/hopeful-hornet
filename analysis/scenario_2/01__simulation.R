@@ -33,30 +33,44 @@ handlers(handler_progress(
 
 # 3. Simulation functions ------------------------------------------------------
 func_files <- list.files(
-  path = here::here("R/"), pattern = "\\.R$", full.names = TRUE)
+  path = here::here("R/"),
+  pattern = "\\.R$",
+  full.names = TRUE
+)
 
 walk(func_files, source)
 
 # 4. Simulating "true" data ----------------------------------------------------
 sim <- simulate_data(
-  n_subjects = 10000, n_waves = 3, scenario = scenario, 
-  resim = FALSE, betas = NULL, seed = 123, verbose = TRUE)
+  n_subjects = 10000,
+  n_waves = 3,
+  scenario = scenario,
+  resim = FALSE,
+  betas = NULL,
+  seed = 123,
+  verbose = TRUE
+)
 
 # Adding previous states
 data <- sim$data |> add_previous_status()
 
 # 5. Fit base, additive, multiplicative models ---------------------------------
 models <- fit_markov_model(
-  data         = data, 
-  sample_sizes = c(100, 250, 1000, 5000), 
-  n_reps       = 2,
-  parallel     = TRUE,
-  seed         = 125)
+  data = data,
+  sample_sizes = c(100, 250, 500),
+  n_reps = 1,
+  parallel = TRUE,
+  seed = 125
+)
 
 # 6. Extract β‑lists -----------------------------------------------------------
 message("Extracting β values ... ")
 
-model_fits <- models[c("base_models", "additive_models", "multiplicative_models")]
+model_fits <- models[c(
+  "base_models",
+  "additive_models",
+  "multiplicative_models"
+)]
 
 model_coefs <- imap(model_fits, function(by_sub_blocks, parent) {
   imap(by_sub_blocks, function(by_sizes, sub_blocks) {
@@ -70,12 +84,14 @@ model_coefs <- imap(model_fits, function(by_sub_blocks, parent) {
 pids_df <- imap(models$idv_trans, function(by_reps, size_label) {
   imap(by_reps, function(by_pid_list, rep) {
     tibble(
-      ID         = as.numeric(stringr::str_remove(names(by_pid_list), "^p_")),
+      ID = as.numeric(stringr::str_remove(names(by_pid_list), "^p_")),
       size_label = size_label,
-      rep        = as.character(rep)
+      rep = as.character(rep)
     )
   })
-}) |> list_flatten() |> bind_rows()
+}) |>
+  list_flatten() |>
+  bind_rows()
 
 # 8. Resimulate from each β‑list in parallel -----------------------------------
 message("Resimulating data ... ")
@@ -84,7 +100,7 @@ num_tasks <- model_coefs |> listr::list_flatten(max_depth = 3) |> length()
 
 resimulation <- resimulate_data(
   model_coefs = model_coefs,
-  sim = sim,
+  sim = data,
   scenario = scenario,
   num_tasks = num_tasks
 )
@@ -97,19 +113,23 @@ plan(sequential)
 # # Resimulation
 saveRDS(
   object = resimulation,
-  file = file.path(this.dir(), "results/cache/resim.RDS"))
+  file = file.path(this.dir(), "results/cache/resim.RDS")
+)
 
 # Models (obs_trans)
 saveRDS(
   object = models$idv_trans,
-  file = file.path(this.dir(), "results/cache/obs_trans.RDS"))
+  file = file.path(this.dir(), "results/cache/obs_trans.RDS")
+)
 
 # Models (fits)
 saveRDS(
   object = model_fits,
-  file = file.path(this.dir(), "results/cache/models.RDS"))
+  file = file.path(this.dir(), "results/cache/models.RDS")
+)
 
 # PIDs
 saveRDS(
   object = pids_df,
-  file = file.path(this.dir(), "results/cache/pids.RDS"))
+  file = file.path(this.dir(), "results/cache/pids.RDS")
+)
