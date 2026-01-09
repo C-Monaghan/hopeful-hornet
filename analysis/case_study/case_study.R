@@ -1,6 +1,8 @@
 # Applying the simulation design to a case study dataset
 # The Health and Retirement Study (HRS)
 
+# rm(list = ls()); gc()
+
 set.seed(86825936)
 
 # Packages ---------------------------------------------------------------------
@@ -50,20 +52,24 @@ data <- readRDS(here::here("analysis/case_study/data/HRS.RDS")) |>
       is.na(x3) & w == 3 ~ 79.16,
       TRUE ~ x3
     ),
+    x4 = ifelse(is.na(x4), 1.66, x4),
     x5 = case_when(
-      x5 <= 0 ~ NA,
-      x5 >= 200 ~ NA,
+      is.na(x5) & w == 2 ~ 84.4, is.na(x5) & w == 3 ~ 83.3,
+      x5 <= 0 & w == 2 ~ 84.4, x5 <= 0 & w == 3 ~ 83.3,
+      x5 >= 200 & w == 2 ~ 84.4, x5 >= 200 & w == 2 ~ 83.3,
       TRUE ~ x5
     )
   )
 
 # Applying DTMC model ----------------------------------------------------------
+message("Fitting Markov Model")
+
 models <- fit_markov_model(
   data = data,
   sample_sizes = c(100, 250, 1000, 5000),
-  n_reps = 100,
+  n_reps = 200,
   parallel = TRUE,
-  seed = 125
+  seed = 86825936
 )
 
 # Extract β‑lists -----------------------------------------------------------
@@ -97,6 +103,8 @@ pids_df <- imap(models$idv_trans, function(by_reps, size_label) {
   bind_rows()
 
 # Save observed transitions (P) ------------------------------------------------
+message("Calculating observed transitions ...")
+
 obs_tibble <- imap(models$idv_trans, function(sample_size, size) {
   imap(sample_size, function(rep_list, rep) {
     tibble(
@@ -105,7 +113,7 @@ obs_tibble <- imap(models$idv_trans, function(sample_size, size) {
     ) |>
       tidyr::unnest_longer(data, values_to = "obs_mat", indices_to = "wave") |>
       mutate(
-        ID = stringr::str_remove(ID, "p_"),
+        ID = as.numeric(stringr::str_remove(ID, "p_")),
         wave = stringr::str_remove(wave, "w_"),
         wave = stringr::str_replace(wave, "_", "-"),
         size_label = size,
@@ -118,34 +126,46 @@ obs_tibble <- imap(models$idv_trans, function(sample_size, size) {
 
 # Create predicted transition matrix (P hat)
 ## Creating an augmented dataset
+message("Creating an augmented dataset ...")
+
 augmented_data <- imap(models$sample_data, function(sample_size, size) {
   imap(sample_size, function(data, rep) {
+    
+    # Filter down to those used in model
+    data_filter <- data |> 
+      mutate(size_label = size, rep = as.character(rep)) |>
+      semi_join(pids_df, by = c("ID", "size_label", "rep"))
+    
+    # Augment their data-points
     data_augment <- bind_rows(
-      mutate(data, y_prev = factor(1)),
-      mutate(data, y_prev = factor(2)),
-      mutate(data, y_prev = factor(3))
+      mutate(data_filter, y_prev = factor(1)),
+      mutate(data_filter, y_prev = factor(2)),
+      mutate(data_filter, y_prev = factor(3))
     ) |>
       arrange(ID, w) |>
-      mutate(size = size) |>
-      relocate(size)
-  })
-}) |>
-  bind_rows()
+      rename(size = size_label)
+  
+      return(data_augment)
+    })
+  }) |> bind_rows()
 
 ## Predicting transition probabilities from this augmented data
+message("Calculating predicting transition probabilities ...")
+
 prediction_matrices <- imap(model_fits, function(parent_block, parent) {
   imap(parent_block, function(sub_block, sub_model) {
     imap(sub_block, function(sample_size, size_label) {
-      ## Filter to the participants used in the sample
-      data <- augmented_data |>
-        filter(size %in% size_label)
-
-      ## Get their IDS (for later)
-      ids <- data |> pull(ID) |> unique()
-
       imap(sample_size, function(model, reps) {
+        
+        ## Filter to the participants used in the sample
+        data_filter <- augmented_data |>
+          filter(size %in% size_label, rep %in% reps)
+        
+        ## Get their IDS (for later)
+        ids <- data_filter |> pull(ID) |> unique()
+        
         ## Predict y value probabilities
-        probs <- predict(model, newdata = data, type = "probs")
+        probs <- predict(model, newdata = data_filter, type = "probs")
 
         ## Split into 3x3 matrices
         split_rows <- split(
@@ -172,30 +192,41 @@ prediction_matrices <- imap(model_fits, function(parent_block, parent) {
 })
 
 ## Creating the predicted dataset
-predicted_trans_tibble <- imap_dfr(
-  prediction_matrices,
-  function(parent_block, parent) {
-    imap_dfr(parent_block, function(sub_block, sub_model) {
-      imap_dfr(sub_block, function(sample_block, sample_size) {
-        imap_dfr(sample_block, function(rep_list, reps) {
-          imap_dfr(rep_list, function(probs, ids) {
-            tibble(
-              ID = stringr::str_extract(ids, "(?<=ID_)\\d+"),
-              wave = stringr::str_remove(ids, "ID_\\d+_"),
-              parent_block = parent,
-              sub_block = sub_model,
-              size_label = sample_size,
-              rep = reps,
-              sim_mat = list(probs)
-            )
-          })
+message("Creating the predicted dataset ...")
+
+## Creating the predicted dataset
+rows <- list()
+i <- 1L
+
+iwalk(prediction_matrices, function(parent_block, parent) {
+  iwalk(parent_block, function(sub_block, sub_model) {
+    iwalk(sub_block, function(sample_block, sample_size) {
+      iwalk(sample_block, function(rep_list, reps) {
+        iwalk(rep_list, function(probs, ids) {
+          rows[[i]] <<- list(
+            ID = str_extract(ids, "(?<=ID_)\\d+"),
+            wave = str_remove(ids, "ID_\\d+_"),
+            parent_block = parent,
+            sub_block = sub_model,
+            size_label = sample_size,
+            rep = reps,
+            sim_mat = list(probs)
+          )
+          
+          i <<- i + 1L
         })
       })
     })
-  }
-)
+  })
+})
+
+predicted_trans_tibble <- tidyr::as_tibble(rbindlist(
+  rows, use.names = TRUE, fill = TRUE)) |> 
+  mutate(ID = as.numeric(ID))
 
 # Join both tibbles
+message("Joining both tibbles ... ")
+
 transition_tibble <- predicted_trans_tibble |>
   left_join(obs_tibble, by = c("ID", "wave", "size_label", "rep")) |>
   mutate(obs_mat = unname(obs_mat))
@@ -203,7 +234,11 @@ transition_tibble <- predicted_trans_tibble |>
 # Matrix distance calculations -------------------------------------------------
 num_tasks <- nrow(transition_tibble)
 
+pb <- txtProgressBar(min = 0, max = num_tasks, style = 3)
+
 results_list <- vector("list", length = num_tasks)
+
+message("Running matrix distance calculations ... ")
 
 # 5. Calculating matrix distances ----------------------------------------------
 for (i in seq_len(num_tasks)) {
@@ -218,11 +253,20 @@ for (i in seq_len(num_tasks)) {
       NULL
     }
   )
+  
+  # Update progress bar
+  setTxtProgressBar(pb, i)
 }
+
+close(pb) # Close progress bar
+
+message("Joining distances into one tibble ... ")
 
 results_dt <- data.table::rbindlist(results_list, fill = TRUE, idcol = "row_id")
 
 # Merge with metadata
+message("Merging meta data ... ")
+
 metadata <- transition_tibble |>
   dplyr::select(-c(obs_mat, sim_mat)) |>
   dplyr::mutate(row_id = dplyr::row_number())
@@ -260,6 +304,8 @@ distances <- matrix_distances |>
     values_to = "value"
   )
 
+message("Tidying data ... ")
+
 distances <- distances |>
   data.table::as.data.table() |>
   tidy_metrics()
@@ -291,8 +337,10 @@ best_models <- dist_sum |>
       group_by(parent_block, sub_block, size_label, metric) |>
       # Count each win and summarise
       summarise(n_lowest = sum(lowest), .groups = "drop") |>
-      mutate(prop = n_lowest / 1)
+      mutate(prop = n_lowest / 200)
   })
+
+message("Plotting ... ")
 
 case_study_plot <- best_models |>
   ggplot(aes(x = parent_block, y = prop, fill = sub_block)) +
@@ -317,7 +365,13 @@ case_study_plot <- best_models |>
       "Reduced Model 2",
       "True Model",
       "Overfit Model"
-    )
+    ),
+    labels = c(
+      "Intercept only", 
+      "y ~ x1", 
+      "y ~ x1 + x2", 
+      "y ~ x1 + x2 + x3", 
+      "y ~ x1 + x2 + x3 + x4 + x5")
   ) +
   scale_y_continuous(labels = scales::percent_format()) +
   labs(
@@ -338,14 +392,18 @@ case_study_plot <- best_models |>
   ) +
   theme_simulation()
 
+message("Exporting ... ")
+
+# Save PDF version of plot
 cowplot::save_plot(
-  filename = here::here("analysis/case_study/results/results.pdf"),
+  filename = here::here("analysis/case_study/results/figure 2a.pdf"),
   plot = case_study_plot,
   base_width = 25,
   base_height = 10
 )
 
+# Save RDS version of plot
 saveRDS(
   object = case_study_plot,
-  here::here("manuscript/files/figures/figure_2.RDS")
+  here::here("analysis/case_study/results/figure_2a.RDS")
 )
