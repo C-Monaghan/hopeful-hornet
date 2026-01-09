@@ -1,8 +1,33 @@
-# hopeful-hornet
 
-### 🙏🐝: Note on "hopeful hornet" project name
 
-Because project titles change all the time we used [{codename}](http://svmiller.com/codename/) to generate an generate an [Ubuntu-style](https://wiki.ubuntu.com/DevelopmentCodeNames)
+<!-- README.md is generated from README.qmd. Please edit that file -->
+
+## Goodness of fit diagnostics for discrete time Markov models of cognitive transitions
+
+- [Cormac Monaghan](https://c-monaghan.github.io/) • Maynooth University
+- [Idemauro Antonio Rodrigues de
+  Lara](https://scholar.google.com/citations?user=-f0hcJYAAAAJ&hl=pt-BR)
+  • University of São Paulo
+- [Rafael de Andrade Moral](https://rafamoral.github.io/) • Maynooth
+  University
+- [Joanna McHugh
+  Power](https://www.maynoothuniversity.ie/people/joanna-mchugh-power) •
+  Maynooth University
+
+------------------------------------------------------------------------
+
+> Monaghan, C., de Lara, IAR, de Andrade Moral, R, & McHugh Power, J.
+> Goodness of fit diagnostics for Markov models.
+
+------------------------------------------------------------------------
+
+## Abstract
+
+## 🙏🐝: Note on “hopeful hornet” project name
+
+Because project titles change all the time we used
+[{codename}](http://svmiller.com/codename/) to generate an generate an
+[Ubuntu-style](https://wiki.ubuntu.com/DevelopmentCodeNames)
 internal-to-us project name that won’t change.
 
 ``` r
@@ -14,3 +39,10 @@ codename_message()
 codename(seed = "residual diagnostics", type = "ubuntu")
 #> [1] "hopeful hornet"
 ```
+
+## Licenses
+
+**Text and figures:** All prose and images are licensed under Creative
+Commons ([CC-BY-4.0](http://creativecommons.org/licenses/by/4.0/)).
+
+**Code:** All code is licensed under the [MIT License](LICENSE.md).
