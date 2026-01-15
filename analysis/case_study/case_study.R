@@ -54,9 +54,12 @@ data <- readRDS(here::here("analysis/case_study/data/HRS.RDS")) |>
     ),
     x4 = ifelse(is.na(x4), 1.66, x4),
     x5 = case_when(
-      is.na(x5) & w == 2 ~ 84.4, is.na(x5) & w == 3 ~ 83.3,
-      x5 <= 0 & w == 2 ~ 84.4, x5 <= 0 & w == 3 ~ 83.3,
-      x5 >= 200 & w == 2 ~ 84.4, x5 >= 200 & w == 2 ~ 83.3,
+      is.na(x5) & w == 2 ~ 84.4,
+      is.na(x5) & w == 3 ~ 83.3,
+      x5 <= 0 & w == 2 ~ 84.4,
+      x5 <= 0 & w == 3 ~ 83.3,
+      x5 >= 200 & w == 2 ~ 84.4,
+      x5 >= 200 & w == 2 ~ 83.3,
       TRUE ~ x5
     )
   )
@@ -130,12 +133,11 @@ message("Creating an augmented dataset ...")
 
 augmented_data <- imap(models$sample_data, function(sample_size, size) {
   imap(sample_size, function(data, rep) {
-    
     # Filter down to those used in model
-    data_filter <- data |> 
+    data_filter <- data |>
       mutate(size_label = size, rep = as.character(rep)) |>
       semi_join(pids_df, by = c("ID", "size_label", "rep"))
-    
+
     # Augment their data-points
     data_augment <- bind_rows(
       mutate(data_filter, y_prev = factor(1)),
@@ -144,10 +146,11 @@ augmented_data <- imap(models$sample_data, function(sample_size, size) {
     ) |>
       arrange(ID, w) |>
       rename(size = size_label)
-  
-      return(data_augment)
-    })
-  }) |> bind_rows()
+
+    return(data_augment)
+  })
+}) |>
+  bind_rows()
 
 ## Predicting transition probabilities from this augmented data
 message("Calculating predicting transition probabilities ...")
@@ -156,14 +159,13 @@ prediction_matrices <- imap(model_fits, function(parent_block, parent) {
   imap(parent_block, function(sub_block, sub_model) {
     imap(sub_block, function(sample_size, size_label) {
       imap(sample_size, function(model, reps) {
-        
         ## Filter to the participants used in the sample
         data_filter <- augmented_data |>
           filter(size %in% size_label, rep %in% reps)
-        
+
         ## Get their IDS (for later)
         ids <- data_filter |> pull(ID) |> unique()
-        
+
         ## Predict y value probabilities
         probs <- predict(model, newdata = data_filter, type = "probs")
 
@@ -212,7 +214,7 @@ iwalk(prediction_matrices, function(parent_block, parent) {
             rep = reps,
             sim_mat = list(probs)
           )
-          
+
           i <<- i + 1L
         })
       })
@@ -221,7 +223,10 @@ iwalk(prediction_matrices, function(parent_block, parent) {
 })
 
 predicted_trans_tibble <- tidyr::as_tibble(rbindlist(
-  rows, use.names = TRUE, fill = TRUE)) |> 
+  rows,
+  use.names = TRUE,
+  fill = TRUE
+)) |>
   mutate(ID = as.numeric(ID))
 
 # Join both tibbles
@@ -253,7 +258,7 @@ for (i in seq_len(num_tasks)) {
       NULL
     }
   )
-  
+
   # Update progress bar
   setTxtProgressBar(pb, i)
 }
@@ -367,11 +372,12 @@ case_study_plot <- best_models |>
       "Overfit Model"
     ),
     labels = c(
-      "Intercept only", 
-      "y ~ x1", 
-      "y ~ x1 + x2", 
-      "y ~ x1 + x2 + x3", 
-      "y ~ x1 + x2 + x3 + x4 + x5")
+      "Intercept only",
+      "y ~ x1",
+      "y ~ x1 + x2",
+      "y ~ x1 + x2 + x3",
+      "y ~ x1 + x2 + x3 + x4 + x5"
+    )
   ) +
   scale_y_continuous(labels = scales::percent_format()) +
   labs(
