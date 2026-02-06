@@ -554,7 +554,7 @@ Since an observed transition is a stochastic realization from this probability d
 <distance-metrics>
 To address this gap, a natural approach is to compare the empirical transition structure observed in the data with the model-implied transition structure produced by the fitted model. Let $upright(bold(P))$ denote the empirical transition matrix estimated directly from the observed transitions, and let $hat(upright(bold(P)))$ denote the corresponding transition matrix estimated by fitting a Markov model. The central question then becomes: "How different is $hat(upright(bold(P)))$ from $upright(bold(P))$?". In univariate models, a simple way of measuring this difference is by calculating a residual, which typically relies on the signed unidimensional distance between an observation and a fitted value (e.g., $y - hat(y)$). However, determining the best way to measure a distance between two matrices is less trivial.
 
-Distance-based metrics provide a principled way to quantify discrepancies between two transition matrices. These metrics treat the transition matrix as a $K times K$ object whose structure can be assessed globally, rather than focusing on individual probabilities in isolation. Let $upright(bold(D)) = upright(bold(P)) - hat(upright(bold(P)))$ denote the matrix of element-wise differences. Several matrix norms and divergence measures can then be used to summarize the magnitude of discrepancy, each emphasizing different structural features of the transition process. For the purpose of this paper we focus on five of these distance measures which are summarized in #ref(<tbl-metrics>, supplement: [Table]). In addition, we compare these measures against current benchmark information criteria (AIC and BIC) within simulation studies whose complete setup is explained in the Methods section.
+Distance-based metrics provide a principled way to quantify discrepancies between two transition matrices. These metrics treat the transition matrix as a $K times K$ object whose structure can be assessed globally, rather than focusing on individual probabilities in isolation. Let $upright(bold(D)) = upright(bold(P)) - hat(upright(bold(P)))$ denote the matrix of element-wise differences. Several matrix norms and divergence measures can then be used to summarize the magnitude of discrepancy, each emphasizing different structural features of the transition process. For the purpose of this paper we focus on six of these distance measures which are summarized in #ref(<tbl-metrics>, supplement: [Table]). In addition, we compare these measures against current benchmark information criteria (AIC and BIC) within simulation studies whose complete setup is explained in the Methods section.
 
 #figure([
 #show figure: set block(breakable: true)
@@ -563,7 +563,7 @@ Distance-based metrics provide a principled way to quantify discrepancies betwee
 
   #let style-dict = (
     // tinytable style-dict after
-    "1_0": 0, "2_0": 0, "3_0": 0, "4_0": 0, "5_0": 0, "6_0": 0, "7_0": 0, "0_1": 1, "0_0": 2
+    "1_0": 0, "2_0": 0, "3_0": 0, "4_0": 0, "5_0": 0, "6_0": 0, "7_0": 0, "8_0": 0, "0_1": 1, "0_0": 2
   )
 
   #let style-array = ( 
@@ -615,7 +615,7 @@ Distance-based metrics provide a principled way to quantify discrepancies betwee
       if style != none and "background" in style { style.background }
     },
  table.hline(y: 1, start: 0, end: 2, stroke: 0.1em + black),
- table.hline(y: 8, start: 0, end: 2, stroke: 0.1em + black),
+ table.hline(y: 9, start: 0, end: 2, stroke: 0.1em + black),
     // tinytable lines before
 
     // tinytable header start
@@ -631,6 +631,7 @@ Distance-based metrics provide a principled way to quantify discrepancies betwee
 [Maximum absolute error], [#mitex(`\max_{j,k} |d_{j,k}|`)],
 [Root mean squared error], [#mitex(`\sqrt{ \frac{1}{K^2} \sum_{j=1}^{K}\sum_{k=1}^{K} d_{j,k}^2 }`)],
 [Correlation dissimilarity], [#mitex(`1 - \text{corr}(\text{vec}(\mathbf{P}), \text{vec}(\hat{\mathbf{P}}))`)],
+[Kullback-Leibler divergence], [#mitex(`\sum_{j=1}^{K}\sum_{k=1}^{K} (p_{j,k} + \epsilon) \, \log\!\left(\frac{p_{j,k}}{\hat{p}_{j,k}}\right)`)],
 [Akaike information criterion], [#mitex(`2k - 2\text{ln}(\hat{\ell})`)],
 [Bayesian information criterion], [#mitex(`-2\text{ln}(\hat{\ell}) + k\text{ln}(n)`)],
 
@@ -639,7 +640,7 @@ Distance-based metrics provide a principled way to quantify discrepancies betwee
     table.footer(
       repeat: false,
       // tinytable notes after
-    table.cell(align: left, colspan: 2, text([K represents the total number of categories; corr(x, y) = is the Pearson correlation function; vec(⋅) is an operator that converts a matrix into a vector by stacking its columns; 𝜃 is the number of model parameters; ℓ is the model’s log-likelihood; 𝑛 is the sample size,])),
+    table.cell(align: left, colspan: 2, text([K represents the total number of categories; corr(x, y) = is the Pearson correlation function; vec(⋅) is an operator that converts a matrix into a vector by stacking its columns; 𝜃 is the number of model parameters; ℓ is the model’s log-likelihood; 𝑛 is the sample size. Additionally, for the Kullback–Leibler divergence, a small constant ε = 1e-10 is added to each matrix entry to avoid undefined logarithms when probabilities are zero.])),
     ),
     
 
@@ -659,6 +660,7 @@ supplement: "Table",
 <tbl-metrics>
 
 
+#pagebreak()
 = Methods
 <methods>
 == Simulation study aims
@@ -676,8 +678,8 @@ We simulated data for $N = 10 \, 000$ individuals across $t = 3$ waves. Consiste
 We generated a set of time-invariant and time-varying covariates designed to mimic plausible risk factors observed in ageing cohort studies @sonnega2011. Each covariate was chosen to reflect either a common demographic factor, a behavioural or psychological construct, or generic background variability that may influence cognitive transitions @monaghan2026.
 
 - $upright(bold(x_1))$: A binary covariate drawn from a Bernoulli distribution with probability of success $0.5$. Within the simulation, this variable represents a binary demographic attribute such as gender.
-- $upright(bold(x_2))$: A continuous covariate drawn from a normal distribution $x_2 tilde.op cal(N) (mu = 70 \, #h(0em) sigma^2 = 25)$ and then rounded to the nearest whole number. Within the simulation, this variable represents age.
-- $upright(bold(x_3))$: A continuous covariate from a normal distribution $x_3 tilde.op cal(N) (mu = 25 \, #h(0em) sigma^2 = 225)$, truncated to the interval $[0 \, 60]$ such that $tilde(x_3) = cases(delim: "{", 0 & x_3 < 0 \,, x_3 & 0 lt.eq x_3 gt.eq 60 \,, 60 & x_3 > 60)$ and then rounded to the nearest whole number. Within the simulation, this variable represents psychological or behavioural assessments (e.g., memory tests or psychosocial scales) with fixed bounded scores.
+- $upright(bold(x_2))$: A continuous covariate drawn from a normal distribution $cal(N) (70 \, 25)$ and then rounded to the nearest whole number. Within the simulation, this variable represents age.
+- $upright(bold(x_3))$: A rounded continuous covariate from a normal distribution $cal(N) (25 \, 225)$, truncated to the interval $[0 \, 60]$ such that values above or below the interval are set to the nearest value within the interval (i.e., 0 or 60) and then rounded to the nearest whole number. Within the simulation, this variable represents psychological or behavioural assessments (e.g., memory tests or psychosocial scales) with fixed bounded scores.
 - $upright(bold(x_4 \, x_5))$: Continuous noise variables, drawn from a uniform distribution $cal(U) (0 \, 1)$.
 
 Four of these covariates evolved over time to introduce time-varying confounding: $ x_(2 i \, t) & = x_(2 i 0) + (t - 1) times 2\
@@ -690,7 +692,7 @@ where $t in { 1 \, 2 \, 3 }$ indexes follow-up waves. The full covariate vector 
 #pagebreak()
 === Simulation scenarios
 <simulation-scenarios>
-We evaluated three data-generating mechanisms (DGMs) of increasing complexity. In all scenarios, transition probabilities were governed by a multinomial logistic model (#ref(<eq-multinomial-formula>, supplement: [Equation])) with state 1 as the reference category. The corresponding transition probability for each non-reference category was calculated using #ref(<eq-non-reference-probability>, supplement: [Equation]) and for the reference category using #ref(<eq-reference-probability>, supplement: [Equation]). Additionally, all true value parameters $(theta_(S 1) \, theta_(S 2) \, theta_(S 3))$ were derived from prior empirical research @monaghan2026.
+We evaluated three data-generating mechanisms (DGMs) of increasing complexity. In all scenarios, transition probabilities were governed by a multinomial logistic model (#ref(<eq-multinomial-formula>, supplement: [Equation])) with state 1 as the reference category. The corresponding transition probability for each non-reference category was calculated using #ref(<eq-non-reference-probability>, supplement: [Equation]) and for the reference category using #ref(<eq-reference-probability>, supplement: [Equation]). Additionally, , all true value parameters vectors for scenarios S1, S2, and S3 $(theta_(S 1) \, theta_(S 2) \, theta_(S 3) \, upright("respectively"))$ were derived from prior empirical research investigating behavioral correlates of dementia transitions @livingston2024a@monaghan2026.
 
 In scenario 1, transitions depended solely on a set of individual covariates $upright(bold(X))_(i \, t) = (x_(1 i t) \, x_(2 i t) \, x_(3 i t))$, with no effect of the previous state. Within this scenario, the linear predictor was defined as: $ eta_(i \, t)^((k)) = alpha_k + upright(bold(X))_(i t)^(⊺) beta_k \, $
 
@@ -715,7 +717,7 @@ delta & = (- 0.292 \, - 1.019 \, - 0.474 \, - 1.268 \, - 0.031 \, - 0.072 \, 0.0
 <estimation-methods>
 === Model fitting
 <model-fitting>
-For each simulated dataset, we fitted 15 multinomial logistic regression models using the #emph[nnet] package @venables2022 across 4 different sample sizes ${ 100 \, 250 \, 1000 \, 5000 }$. These models were grouped into three "families", corresponding to the level of model misspecification relative to the true DGM.
+For each simulated dataset, we first partitioned the data into training $(80 %)$ and test $(20 %)$ sets. Model parameters were estimated exclusively on the training data, while all performance evaluations were conducted on held-out test data. For each training set, we fitted 15 multinomial logistic regression models using the #emph[nnet] package @venables2022 across 4 different sample sizes ${ 100 \, 250 \, 1000 \, 5000 }$. These models were grouped into three "families", corresponding to the level of model misspecification relative to the true DGM.
 
 + Base Models (Ignoring Markov Property)
 
@@ -749,15 +751,15 @@ upright("Overfit:") & quad Y_(t + 1) tilde.op (x 1 + x 2 + x 3 + x 4 + x 5) \* Y
 
 === Model-based transition probabilities
 <model-based-transition-probabilities>
-To evaluate how well each fitted model $cal(M)$ captured the underlying transition dynamics, we generated model-based transition probability matrices via a two step procedure. In the first step, an augmented dataset was created enabled the model to predict transitions from all possible previous states. For each individual $i$ at each time point $t$, three augmented rows were created corresponding to the three possible previous states $j in { 1 \, 2 \, 3 }$. This ensured that the fitted model could generate predicted probabilities $ P (Y_(t + 1) = k #h(0em) \| #h(0em) Y_t = j \, upright(bold(z))_(i \, t)) $
+To evaluate how well each fitted model $cal(M)$ captured the underlying transition dynamics, we generated model-based transition probability matrices via a two step procedure. In the first step, an augmented version of the test dataset was created enabled the model to predict transitions from all possible previous states. For each individual $i$ at each time point $t$, three augmented rows were created corresponding to the three possible previous states $j in { 1 \, 2 \, 3 }$. This ensured that the fitted model could generate predicted probabilities $ P (Y_(t + 1) = k #h(0em) \| #h(0em) Y_t = j \, upright(bold(z))_(i \, t)) $
 
-for every $j$, regardless of the individual's actual previous state in the observed data.
+for every $j$, regardless of the individual's actual previous state in the data.
 
-In the second step, we derived the transition behaviour implied by each model by predicting next-state transitions using the model's estimated parameters. For each model $cal(M)$, the estimated coefficients $hat(theta)^(cal(M))$ were extracted and treated them as the new "true" data-generating parameters. Using these parameters, we predicted next-state transitions $hat(Y)_(i \, t + 1)$ for each individual and time point, conditional on their observed covariates. This produced predicted transition patterns implied by model $cal(M)$, rather than those realized in the original simulation.
+In the second step, we derived the transition behaviour implied by each model by predicting next-state transitions using the model's estimated parameters. For each model $cal(M)$, the estimated coefficients $hat(theta)^(cal(M))$ were used to compute predicted probabilities for all possible state transitions $(j arrow.r k)$.
 
 == Performance Measures
 <performance-measures>
-The core of our evaluation involved comparing the empirical transition matrix from the original simulated data to the model-implied transition matrix. Let $upright(bold(P))_(i \, t)$ be the empirical transition matrix for individual $i$ at time $t$ estimated by tabulating state transitions $(Y_(i \, t) \, Y_(i \, t + 1))$ from the original simulated data. Additionally, let $hat(upright(bold(P)))_(i \, t)$ be the model-implied transition matrix. For individual $i$ at time $t$ with a covariate pattern $upright(bold(z))_(i \, t)$ this is a $K times K$ matrix where the entry $j \, k$ is the model's predicted probability $P (Y_(t + 1) = k #h(0em) \| #h(0em) Y_t = j \, upright(bold(z))_(i \, t))$. We defined the difference matrix as $upright(bold(D))_(i \, t) = upright(bold(P))_(i \, t) - hat(upright(bold(P)))_(i \, t)$ and quantify the discrepancy using the distance metrics defined in #ref(<tbl-metrics>, supplement: [Table]).
+The core of our evaluation involved comparing the empirical transition matrix from the test dataset to the model-implied transition matrix. Let $upright(bold(P))_(i \, t)$ be the empirical transition matrix for individual $i$ at time $t$ estimated by tabulating state transitions $(Y_(i \, t) \, Y_(i \, t + 1))$ from the test dataset. Additionally, let $hat(upright(bold(P)))_(i \, t)$ be the model-implied transition matrix. For individual $i$ at time $t$ with a covariate pattern $upright(bold(z))_(i \, t)$ this is a $K times K$ matrix where the entry $j \, k$ is the model's predicted probability $P (Y_(t + 1) = k #h(0em) \| #h(0em) Y_t = j \, upright(bold(z))_(i \, t))$. We defined the difference matrix as $upright(bold(D))_(i \, t) = upright(bold(P))_(i \, t) - hat(upright(bold(P)))_(i \, t)$ and quantify the discrepancy using the distance metrics defined in #ref(<tbl-metrics>, supplement: [Table]).
 
 = Results
 <results>
@@ -823,7 +825,7 @@ Initially we present an exploratory analysis of the data from each scenario usin
       let style = get-style(x, y)
       if style != none and "background" in style { style.background }
     },
- table.hline(y: 1, start: 1, end: 4, stroke: 0.05em + black),
+ table.hline(y: 1, start: 1, end: 4, stroke: 0.05em + black), table.hline(y: 1, start: 1, end: 4, stroke: 0.05em + black),
  table.hline(y: 2, start: 0, end: 5, stroke: 0.1em + black),
  table.hline(y: 6, start: 0, end: 5, stroke: 0.1em + black),
  table.hline(y: 10, start: 0, end: 5, stroke: 0.1em + black),
@@ -833,21 +835,21 @@ Initially we present an exploratory analysis of the data from each scenario usin
     // tinytable header start
     table.header(
       repeat: true,
-[ ], table.cell(stroke: (bottom: .05em + black), colspan: 3, align: center)[Current state (t)], [ ],
+[ ], table.cell(colspan: 3, align: center)[Current state (t)], [ ],
 [Previous state (t-1)], [1], [2], [3], [Total],
     ),
     // tinytable header end
 
     // tinytable cell content after
-table.cell(colspan: 5)[Scenario 1],
+table.cell(colspan: 5)[Base simulation],
 [1], [12856 \ (0.64)], [2456 \ (0.12)], [847 \ (0.04)], [16159],
 [2], [2155 \ (0.11)], [498 \ (0.02)], [204 \ (0.01)], [2857],
 [3], [750 \ (0.04)], [167 \ (0.01)], [67 \ (0.003)], [984],
-table.cell(colspan: 5)[Scenario 2],
+table.cell(colspan: 5)[Additive simulation],
 [1], [13817 \ (0.69)], [1996 \ (0.10)], [192 \ (0.01)], [16005],
 [2], [1657 \ (0.08)], [2606 \ (0.04)], [162 \ (0.01)], [2606],
 [3], [120 \ (0.01)], [55 \ (0.003)], [1214 \ (0.06)], [1389],
-table.cell(colspan: 5)[Scenario 3],
+table.cell(colspan: 5)[Multiplicative simulation],
 [1], [14030 \ (0.70)], [1921 \ (0.10)], [166 \ (0.01)], [16117],
 [2], [1602 \ (0.08)], [712 \ (0.04)], [167 \ (0.01)], [2481],
 [3], [102 \ (0.01)], [61 \ (0.003)], [1239 \ (0.06)], [1402],
@@ -872,26 +874,29 @@ supplement: "Table",
 
 To evaluate the ability of each distance metric to identify the true data-generating model, we examined the proportion of simulation repetitions in which each model $cal(M)$ was ranked as the best-fitting (#ref(<fig-replications>, supplement: [Figure])).
 
+#pagebreak()
 == Small sample sizes
 <small-sample-sizes>
-For the smallest sample size $(n = 100)$ the Manhattan distance metric was able to identify the true model as often as and, when under increased model complexity, more often than the standard information criteria. The relative robustness in small samples suggests that the Manhattan distance metric is less sensitive to the sampling variability that destabilizes likelihood-based criteria. The remaining metrics (e.g., Frobenius norm, RMSE, correlation dissimilarity) showed mixed performance, often favoring overfitted or reduced models. Notably, for the $n = 250$ repetitions, AIC improved modestly, but continued to misidentify the true model when under increased complexity, especially when interaction terms (Scenario 3) were present. BIC remained unreliable across all scenarios, strongly penalizing model complexity and frequently selecting the null model. In contrast, the Manhattan distance continued to show the most stable ability to detect the true model across repetition, outperforming AIC for the more complex generative scenarios.
+For the smallest sample size $(n = 100)$ clear differences emerged between distance-based metrics and likelihood-based information criteria. Across both additive and multiplicative generative scenarios, the Manhattan distance and the Kullback--Leibler divergence identified the true model at rates comparable to, and in several cases exceeding, those of AIC and BIC. As shown in #ref(<fig-replications>, supplement: [Figure]) both metrics maintained a non-trivial probability of selecting the true model even under increased model complexity, whereas the information criteria frequently favoured simpler alternatives. This relative robustness at small $n$ suggests that the Manhattan distance and KL divergence are less sensitive to the sampling variability that destabilises likelihood-based criteria in sparse data settings. In contrast, the remaining metrics (e.g., Frobenius norm, RMSE, correlation dissimilarity) showed mixed performance, often favoring overfitted or reduced models.
+
+At $n = 250$, AIC showed modest improvement, particularly for simpler generative mechanisms. However, it continued to misidentify the true model under increased complexity, most notably in the multiplicative scenarios. BIC remained unreliable across all scenarios, strongly penalizing model complexity and frequently selecting the null model. In contrast, the Manhattan distance continued to demonstrate comparatively stable recovery of the true model across repetitions, and most clearly outperformed AIC in the more complex additive and multiplicative settings. The Kullback--Leibler divergence similarly outperformed both AIC and BIC up to, but not including, the most complex multiplicative scenario.
 
 == Moderate sample sizes
 <moderate-sample-sizes>
-With a moderate increase in sample size $(n = 1000)$, AIC's performance improved markedly, correctly identifying the true model in more than $90 %$ of repetitions across all scenarios. This reflects its well-known asymptotic behaviour in nested model comparisons. However, BIC continued to underfit, performing well only in Scenario 1 (the simplest generative mechanism) and frequently discarding key covariates or state-dependent terms in Scenarios 2 and 3.
+With a further increase in sample size $(n = 1000)$, the performance of AIC improved substantially. As shown by #ref(<fig-replications>, supplement: [Figure]) AIC correctly identified the true model in over approximately $90 %$ of repetitions across all generative scenarios. However, BIC continued to exhibit systematic underfitting, performing well only in the simplest generative scenario and frequently favoring the null model in both the additive and multiplicative scenarios.
 
-The distance-based metrics showed a more gradual improvement. Most notably, the Manhattan distance consistently ranked the true model as best fitting in approximately half of all repetitions (substantially lower than AIC, but still meaningfully informative). Importantly, their accuracy did not collapse under model complexity, suggesting that these measures capture discrepancies in transition structure that are not always reflected in likelihood-based information criteria. The other metrics continued to show variable behaviour, with some leaning toward overfitted models and others exhibiting instability across replications.
+The distance-based metrics displayed a more gradual improvement with increasing sample size. Most notably, the Kullback--Leibler divergence performed nearly equivalently to AIC across all scenarios, indicating strong sensitivity to discrepancies in the underlying transition structure. The Manhattan distance also remained informative, ranking the true model as best fitting in approximately half of all repetitions across scenarios. Although this performance was weaker than that of AIC, it did not deteriorate with increasing model complexity, suggesting that this metric captures aspects of model misspecification that are not fully reflected in likelihood-based criteria. The remaining distance measures continued to show heterogeneous behaviour, alternating between overfitting and instability across repetitions.
 
 == Large sample sizes
 <large-sample-sizes>
-At the largest sample size examined $(n = 5000)$, both AIC and BIC demonstrated near-perfect performance, identifying the true model in essentially all simulation repetitions across all scenarios. This confirms that, when data are abundant, traditional likelihood-based criteria are sufficient for model recovery.
+At the largest sample size $(n = 5000)$, both AIC and BIC exhibited near-perfect performance, identifying the true model in essentially all simulation repetitions across all generative scenarios. This convergence confirms that, when sufficient data are available, traditional likelihood-based information criteria are adequate for reliable model recovery. In contrast, the relative performance of the distance-based metrics was largely comparable to that observed at $n = 1000$ showing limited additional gains with further increases in sample size. Notably, however, the Kullback--Leibler divergence mirrored the behaviour of AIC and BIC, identifying the true model in nearly all repetitions even under the most complex multiplicative generative scenario.
 
 #figure([
 #box(image("manuscript_files/figure-typst/fig-replications-1.svg", width: 100.0%))
 ], caption: figure.caption(
 position: bottom, 
 [
-Proportion of times when each model was identified as the best. Each bar represents a different model type, with a longer coloured bar indicating that the associated model was selected as the 'best fitting' model more often.
+Proportion of simulation repetitions in which each candidate model was ranked as best fitting across distance metrics and information criteria. Each stacked bar corresponds to a model class, with segment heights representing the percentage of repetitions in which each sub-model was selected as the best fitting. AIC = Akaike information criterion; BIC = Bayesian information criterion.
 ]), 
 kind: "quarto-float-fig", 
 supplement: "Figure", 
@@ -899,22 +904,25 @@ supplement: "Figure",
 <fig-replications>
 
 
+#pagebreak()
 = Case study
 <case-study>
-We illustrate the proposed goodness-of-fit assessment framework using data from the United States Health and Retirement Study (HRS; #cite(<sonnega2011>, form: "prose");). The HRS is a nationally representative longitudinal panel study administered by the Institute for Social Research at the University of Michigan, which follows American adults aged 50 years and older. Since its inception in 1992, the HRS has collected biennial data on participants' health, socioeconomic circumstances, and cognitive functioning, making it a widely used resource for studying cognitive ageing and dementia trajectories. For the purpose of this illustration, we focus on three of these biennial waves from 2018 - 2022.
+We illustrate the proposed goodness-of-fit assessment framework using data from the United States Health and Retirement Study (HRS; #cite(<sonnega2011>, form: "prose");). The HRS is a nationally representative longitudinal panel study administered by the Institute for Social Research at the University of Michigan, which follows American adults aged 50 years and older. Since its inception in 1992, the HRS has collected biennial data on participants' health, socioeconomic circumstances, and cognitive functioning, making it a widely used resource for studying cognitive ageing and dementia trajectories. For the purpose of this illustration, we focus on three of these biennial waves from 2018 - 2022, yielding a sample of $n = 10 \, 895$ respondents.
 
 Cognitive function in the HRS is measured using a battery of assessments adapted from the Telephone Interview for Cognitive Status (TICS; #cite(<fong2009>, form: "prose");). These assessments include immediate and delayed noun free-recall tasks to evaluate episodic memory, a serial sevens subtraction task to assess working memory, and a backward counting task to capture mental processing speed. Based on these assessments, #cite(<crimmins2011>, form: "prose") developed a validated 27-point cognitive scale along with established cut-off points to classify respondents' cognitive status. Following this classification scheme, respondents scoring between 12 and 27 were classified as having normal cognition, scores between 7 and 11 indicated mild cognitive impairment (MCI), and scores between 0 and 6 were classified as dementia.
 
-From the available HRS covariates, we selected five predictors that are commonly examined in studies of cognitive decline @livingston2024a: sex ($x 1$), age ($x 2$), systolic blood pressure ($x 3$), height ($x 4$), and weight ($x 5$). Sex, age, and systolic blood pressure were selected as primary predictors, as these variables have well-established associations with cognitive decline and dementia progression. In contrast, height and weight were included as weak or plausibly non-informative predictors, serving primarily to introduce additional covariate variation and to assess the ability of the proposed goodness-of-fit measures to distinguish meaningful signal from noise.
+From the available HRS covariates, we selected three predictors that are commonly examined in studies of cognitive decline @livingston2024a: sex ($x 1$), age ($x 2$), and a self memory rating ($x 3$). To mirror the design of the simulation study and to assess the ability of the proposed distance metrics to distinguish informative predictors from noise, we additionally simulated two non-informative covariates from a Uniform distribution, such that ${ x 4 ; x 5 } tilde.op cal(U) (0 \, 1)$.
 
-Using this covariate set, we fitted the 15 multinomial logistic regression models defined in #ref(<eq-base-models>, supplement: [Equation]), #ref(<eq-add-models>, supplement: [Equation]), and #ref(<eq-mult-models>, supplement: [Equation]) and compared $upright(bold(P))_(i \, t)$ to the resulting $hat(upright(bold(P)))_(i \, t)$. #ref(<fig-case-study>, supplement: [Figure]) summarizes the relative performance of each model across the distance metrics. Consistent with the simulation study, the Manhattan distance metric identified the true model for sample sizes $n in { 250 \, 1000 \, 5000 }$, however, favored the over-fitted model for size $n = 100$.
+Using this covariate set, we followed the same model-fitting and evaluation procedure as in the simulation study. Specifically, the data were split into training (80%) and test (20%) sets, the 15 multinomial logistic regression models defined in #ref(<eq-base-models>, supplement: [Equation]), #ref(<eq-add-models>, supplement: [Equation]), and #ref(<eq-mult-models>, supplement: [Equation]) were fitted, and observed transition probabilities $upright(bold(P))_(i \, t)$ were compared to predicted probabilities $hat(upright(bold(P)))_(i \, t)$. #ref(<fig-case-study>, supplement: [Figure]) summarises the relative performance of each model across the different goodness-of-fit measures.
+
+Consistent with the simulation results (see #ref(<fig-replications>, supplement: [Figure])), both the Manhattan distance and the Kullback--Leibler divergence most frequently identified the model containing the three substantively meaningful predictors $(x 1 \, x 2 \, x 3)$ in approximately $50 %$ of repetitions in both the base and additive scenarios. In the more complex multiplicative scenario, differences between the distance metrics became more pronounced. While the Manhattan distance increasingly favoured the model excluding the simulated noise covariates as sample size grew, the Kullback--Leibler divergence required substantially larger samples $(n = 1000)$ before consistently identifying the model containing only the non-simulated predictors (mirroring that of the simulation study).
 
 #figure([
 #box(image("manuscript_files/figure-typst/fig-case-study-1.svg", width: 100.0%))
 ], caption: figure.caption(
 position: bottom, 
 [
-Relative model performance across distance metrics for the HRS case study. Green bars indicate the model identified as best-fitting under each distance metric.
+Proportion of case study repetitions in which each candidate model was ranked as best fitting across distance metrics and information criteria. Each stacked bar corresponds to a model class, with segment heights representing the percentage of repetitions in which each sub-model was selected as the best fitting. AIC = Akaike information criterion; BIC = Bayesian information criterion.
 ]), 
 kind: "quarto-float-fig", 
 supplement: "Figure", 
@@ -924,15 +932,19 @@ supplement: "Figure",
 
 = Discussion
 <discussion>
-This study evaluated a set of matrix-based distance metrics as tools for assessing the goodness-of-fit of discrete-time Markov models estimated via multinomial logistic regression, with a particular focus on the usage of such models for dementia progression. Through a simulation study and an empirical case study using HRS data, the results show that distance-based comparisons of observed and model-implied transition matrices offer additional insights beyond traditional likelihood-based criteria.
+This study evaluated a set of matrix-based distance metrics as tools for assessing goodness-of-fit in discrete-time Markov models estimated via multinomial logistic regression, with particular emphasis on applications to dementia progression modelling. Through a combination of simulation experiments and an empirical case study using HRS data, we demonstrate that distance-based comparisons of observed and model-implied transition matrices provide information that is complementary to, and in some settings more reliable than, traditional likelihood-based information criteria.
 
-In the simulation study, the Manhattan distance exhibited strong performance across a range of sample sizes and data-generating mechanisms. Notably, it outperformed AIC and BIC in small samples and under increased model complexity, especially when there were state dependence and interaction effects. This finding indicates that distance-based metrics may be less affected by sampling variability, which can make likelihood-based model selection unreliable in small samples @emiliano2014. While AIC and BIC adjust indirectly with penalties on the likelihood, the Manhattan distance directly assesses model fitness by comparing the observed and implied transition structures. As a result, it seems more effective at catching structural errors in transition dynamics, even when likelihood-based criteria favor oversimplified or overly complex models.
+Across the simulation study, two distance metrics consistently exhibited strong performance: the Manhattan distance and the Kullback--Leibler divergence. Both exhibited strong and comparatively stable performance across a range of sample sizes and data-generating mechanisms, particularly under increased model complexity. Most notably, the Manhattan distance frequently outperformed AIC and BIC in small samples and in settings involving interaction effects or strong state dependence. This finding suggests that the Manhattan distance is comparatively robust to the sampling variability that can destabilise likelihood-based criteria in finite samples @emiliano2014.
 
-As sample size increased, traditional information criteria improved substantially, with both AIC and BIC demonstrating near-perfect recovery of the true data-generating model in large samples. This behaviour is consistent with their known asymptotic properties and confirms that likelihood-based approaches remain appropriate when data are abundant. However, the more gradual improvement observed for the distance-based metrics highlights an important distinction: these metrics do not focus on maximizing predictive likelihood. Instead, they assess how well a fitted model reproduces the actual empirical transition structure. Consequently, their ongoing sensitivity to model misspecification in larger samples can be seen as a strength, especially in applied situations where structural realism matters.
+The KL divergence displayed a complementary pattern. While less robust than the Manhattan distance in the smallest samples and most complex scenarios, its performance improved rapidly with increasing sample size. By moderate to large samples, KL closely mirrored the behaviour of AIC, and at the largest sample sizes it achieved near-perfect recovery of the true model even under the most complex multiplicative data-generating mechanisms. This aligns with the theoretical interpretation of KL divergence as a measure of information loss between true and fitted transition distributions @kullback1951.
 
-The empirical case study further corroborated the simulation findings. Distance-based metrics, particularly the Manhattan distance, tended to favor models including established predictors of cognitive decline (i.e., sex, age, and systolic blood pressure), while remaining less sensitive to the inclusion of weak or non-informative covariates (i.e., height and weight). This behaviour aligns with the intended role of the distance metrics: to distinguish meaningful signal in transition dynamics from noise introduced by irrelevant predictors. Notably, at the smallest sample size $(n = 100)$, some tendency toward overfitting was observed, mirroring patterns seen in the simulations and underscoring the continued importance of cautious model interpretation in limited data settings.
+As expected, the performance of traditional information criteria improved substantially with increasing sample size. In large samples, both AIC and BIC demonstrated near-perfect recovery of the true data-generating model, consistent with their well-established asymptotic properties. These results confirm that likelihood-based approaches remain appropriate and effective when data are abundant and model complexity is well supported.
 
-Taken together, these findings suggest that matrix-based distance metrics provide a valuable addition to the toolkit for evaluating discrete-time Markov models, particularly in contexts where researchers are interested in the accuracy of the implied transition structure rather than just the likelihood-based fit. As such, rather than serving as replacements for information criteria, these measures are best viewed as complementary diagnostics that can reveal forms of misspecification not readily detected by conventional approaches. In applied research on dementia progression and related longitudinal processes, incorporating such distance-based assessments may lead to more transparent and structurally sound model evaluation.
+However, the more gradual convergence of the distance-based metrics highlights an important conceptual distinction. Distance metrics do not aim to optimise predictive likelihood; instead, they assess how well a fitted model reproduces the empirical transition structure itself. Their continued sensitivity to structural discrepancies---even in larger samples---should therefore be viewed as a strength rather than a limitation. In applied settings, particularly in disease progression modelling, a model that fits well in likelihood terms may still produce implausible or distorted transition dynamics, a form of misspecification that distance-based diagnostics are well positioned to detect.
+
+The empirical case study using HRS data further corroborated the simulation findings. Both the Manhattan distance and KL divergence tended to favour models containing substantively meaningful predictors of cognitive decline (sex, age, and self-rated memory), while remaining comparatively insensitive to the inclusion of simulated non-informative covariates. This behaviour is consistent with the intended role of the distance metrics: to distinguish meaningful signal in transition dynamics from noise introduced by irrelevant predictors.
+
+Taken together, these findings suggest that matrix-based distance metrics---particularly the Manhattan distance and KL divergence---provide a valuable addition to the model evaluation toolkit for discrete-time Markov models. Rather than serving as replacements for AIC or BIC, these measures are best viewed as complementary diagnostics that foreground structural fidelity of transition dynamics. Their use is especially well suited to applied research contexts, such as dementia progression modelling, where the realism and interpretability of implied transitions are at least as important as predictive likelihood.
 
 == Limitations and future directions
 <limitations-and-future-directions>
@@ -940,11 +952,7 @@ Several limitations of the present study suggest directions for future research.
 
 == Conclusions
 <conclusions>
-Matric-based distance metrics may serve as a complementary tool alongside likelihood-based criteria for assessing discrete-time Markov models. By comparing empirical transition matrices to those implied by fitted models, the approach provides diagnostic information that complements traditional likelihood-based criteria and is especially sensitive to forms of structural misspecification.
-
-#pagebreak()
-
-
+Matrix-based distance metrics offer a principled and interpretable complement to likelihood-based criteria for assessing discrete-time Markov models. By directly comparing empirical transition matrices to those implied by fitted models, these measures provide diagnostic information that is particularly sensitive to structural misspecification. The strong finite-sample performance of the Manhattan distance and the favourable asymptotic behaviour of the Kullback--Leibler divergence highlight their practical utility, especially in applied longitudinal settings where accurate representation of transition dynamics is central to substantive inference.
 
 #set bibliography(style: "files/apa.csl")
 
@@ -954,5 +962,5 @@ Matric-based distance metrics may serve as a complementary tool alongside likeli
   leading: 0.65em
 )
 
-#bibliography("files/references.bib", title: "References")
+#bibliography("references.bib", title: "References")
 
