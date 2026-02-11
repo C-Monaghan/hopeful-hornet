@@ -38,17 +38,17 @@
 #   4. Supports parallel execution for computationally intensive scenarios
 #
 
-fit_markov_model <- function(
-  data,
-  sample_sizes = c(100, 250, 1000),
-  n_reps = 200,
-  parallel = FALSE,
-  n_cores = parallel::detectCores() - 1,
-  seed = NULL
+fit_markov_model_reduced <- function(
+    data,
+    sample_sizes = c(100, 250, 1000),
+    n_reps = 200,
+    parallel = FALSE,
+    n_cores = parallel::detectCores() - 1,
+    seed = NULL
 ) {
   # Loading function for parallel workers to access
   source(here::here("R/create_individual_transition_matrices.R"))
-
+  
   # Input validation -----------------------------------------------------------
   stopifnot(
     is.data.frame(data),
@@ -58,24 +58,24 @@ fit_markov_model <- function(
     is.logical(parallel),
     is.numeric(n_cores) && n_cores > 0
   )
-
+  
   # Initialize random seed if provided -----------------------------------------
   if (!is.null(seed)) {
     set.seed(seed)
   }
   message("Random seed set to: ", seed)
-
+  
   # Data partitioning ----------------------------------------------------------
   # Split data into training (80%) and test (20%) sets while keeping all
   # observations for each subject together
-  # ids               <- unique(data$ID)
-  # test_id           <- sample(ids, size = round(0.2 * length(ids)))
-  # 
-  # test_data         <- data[data$ID %in% test_id, ]
-  # train_data        <- data[!data$ID %in% test_id, ]
-  # 
-  # unique_train_ids  <- unique(train_data$ID)
-
+  ids <- unique(data$ID)
+  # test_id    <- sample(ids, size = round(0.2 * length(ids)))
+  #
+  # test_data  <- data[data$ID %in% test_id, ]
+  # train_data <- data[!data$ID %in% test_id, ]
+  #
+  # unique_train_ids <- unique(train_data$ID)
+  
   # Pre-allocate lists for storing results with meaningful names ---------------
   results <- list(
     base_models = structure(
@@ -94,7 +94,7 @@ fit_markov_model <- function(
         "of_models"
       )
     ),
-
+    
     additive_models = structure(
       list(
         null_models = vector("list", length(sample_sizes)),
@@ -111,7 +111,7 @@ fit_markov_model <- function(
         "of_models"
       )
     ),
-
+    
     multiplicative_models = structure(
       list(
         null_models = vector("list", length(sample_sizes)),
@@ -128,7 +128,7 @@ fit_markov_model <- function(
         "of_models"
       )
     ),
-
+    
     obs_trans = structure(
       vector("list", length(sample_sizes)),
       .Names = paste0("n_", sample_sizes)
@@ -137,11 +137,7 @@ fit_markov_model <- function(
       vector("list", length(sample_sizes)),
       .Names = paste0("n_", sample_sizes)
     ),
-    train_data = structure(
-      vector("list", length(sample_sizes)),
-      .Names = paste0("n_", sample_sizes)
-    ),
-    test_data = structure(
+    sample_data = structure(
       vector("list", length(sample_sizes)),
       .Names = paste0("n_", sample_sizes)
     ),
@@ -150,7 +146,7 @@ fit_markov_model <- function(
       n_reps = n_reps
     )
   )
-
+  
   # Name the top-level components
   names(results) <- c(
     "base_models",
@@ -158,14 +154,13 @@ fit_markov_model <- function(
     "multiplicative_models",
     "obs_trans",
     "idv_trans",
-    "train_data",
-    "test_data",
+    "sample_data",
     "meta_data"
   )
-
+  
   # Name the sample size elements for each model type
   size_names <- paste0("n_", sample_sizes)
-
+  
   for (model_type in c(
     "base_models",
     "additive_models",
@@ -176,18 +171,8 @@ fit_markov_model <- function(
     }
   }
   
-  # Function to split data into train (80%) and test (20%) set 
-  split_ids <- function(ids, test_prop = 0.2) {
-    n_test  <- ceiling(test_prop * length(ids))
-    test_id <- sample(ids, n_test)
-    list(
-      train_ids = setdiff(ids, test_id),
-      test_ids  = test_id
-    )
-  }
-
   # names(results$obs_trans)   <- size_names
-
+  
   # Model fitting worker function ----------------------------------------------
   # Centralized function to handle model fitting for both parallel and
   # serial execution
@@ -195,126 +180,115 @@ fit_markov_model <- function(
     replicate(
       n_reps,
       {
-        # ---- 1) Split IDs ---------------------------------------------------------
-        ids_all <- unique(data$ID)
-        split   <- split_ids(ids_all, test_prop = 0.2)
+        # Sample subjects (not individual observations) to maintain data structure
+        sample_ids <- sample(ids, size = n)
+        sample_data <- data[data$ID %in% sample_ids, ]
         
-        train_ids_all <- split$train_ids
-        test_ids      <- split$test_ids
+        # Calculate empirical transition probabilities
+        transitions <- table(From = sample_data$y_prev, To = sample_data$y)
+        obs_matrix <- round(prop.table(transitions, margin = 1), 2)
         
-        train_data_all <- data[data$ID %in% train_ids_all, ]
-        test_data      <- data[data$ID %in% test_ids, ]
-        
-        # ---- 2) Sample n training subjects ---------------------------------------
-        sample_ids  <- sample(train_ids_all, size = n)
-        train_data  <- train_data_all[train_data_all$ID %in% sample_ids, ]
-        
-        # ---- 3) Observed training transitions ------------------------------------
-        transitions <- table(From = train_data$y_prev, To = train_data$y)
-        obs_matrix  <- prop.table(transitions, margin = 1)
-        
-        # ---- 4) Fit models --------------------------------------------------------
+        # Fitting all 15 models
         list(
           # Base models (no Markov dependency)
-          base_null = nnet::multinom(y ~ 1, data = train_data, trace = FALSE),
-          base_red1 = nnet::multinom(y ~ x1, data = train_data, trace = FALSE),
+          base_null = nnet::multinom(y ~ 1, data = sample_data, trace = FALSE),
+          base_red1 = nnet::multinom(y ~ x1, data = sample_data, trace = FALSE),
           base_red2 = nnet::multinom(
             y ~ x1 + x2,
-            data = train_data,
+            data = sample_data,
             trace = FALSE
           ),
           base_true = nnet::multinom(
             y ~ x1 + x2 + x3,
-            data = train_data,
+            data = sample_data,
             trace = FALSE
           ),
           base_of = nnet::multinom(
-            y ~ x1 + x2 + x3 + x4 + x5,
-            data = train_data,
+            y ~ x1 + x2 + x3 + x4,
+            data = sample_data,
             trace = FALSE
           ),
-
+          
           # Additive models (with y_prev column)
           add_null = nnet::multinom(
             y ~ y_prev,
-            data = train_data,
+            data = sample_data,
             trace = FALSE
           ),
           add_red1 = nnet::multinom(
             y ~ x1 + y_prev,
-            data = train_data,
+            data = sample_data,
             trace = FALSE
           ),
           add_red2 = nnet::multinom(
             y ~ x1 + x2 + y_prev,
-            data = train_data,
+            data = sample_data,
             trace = FALSE
           ),
           add_true = nnet::multinom(
             y ~ x1 + x2 + x3 + y_prev,
-            data = train_data,
+            data = sample_data,
             trace = FALSE
           ),
           add_of = nnet::multinom(
-            y ~ x1 + x2 + x3 + x4 + x5 + y_prev,
-            data = train_data,
+            y ~ x1 + x2 + x3 + x4 + y_prev,
+            data = sample_data,
             trace = FALSE
           ),
-
+          
           # Multiplicative models (with interactions)
           mult_null = nnet::multinom(
             y ~ y_prev,
-            data = train_data,
+            data = sample_data,
             trace = FALSE
           ),
           mult_red1 = nnet::multinom(
             y ~ (x1 * y_prev),
-            data = train_data,
+            data = sample_data,
             trace = FALSE
           ),
           mult_red2 = nnet::multinom(
             y ~ (x1 + x2) * y_prev,
-            data = train_data,
+            data = sample_data,
             trace = FALSE
           ),
           mult_true = nnet::multinom(
             y ~ (x1 + x2 + x3) * y_prev,
-            data = train_data,
+            data = sample_data,
             trace = FALSE
           ),
           mult_of = nnet::multinom(
-            y ~ (x1 + x2 + x3 + x4 + x5) * y_prev,
-            data = train_data,
+            y ~ (x1 + x2 + x3 + x4) * y_prev,
+            data = sample_data,
             trace = FALSE
           ),
-
+          
           # Observed transition matrix
           obs_matrix = obs_matrix,
-
+          
           # Individual transitions
-          idv_trans = create_individual_transition_matrices(test_data),
-
+          idv_trans = create_individual_transition_matrices(sample_data),
+          
           # Sample data
-          train_data = train_data,
-          test_data = test_data
+          sample_data = sample_data
         )
       },
       simplify = FALSE
     )
   }
-
+  
   # Parallel execution setup ---------------------------------------------------
   if (parallel) {
     require(foreach)
     require(doSNOW)
     require(doRNG)
-
+    
     message("Initializing parallel processing with ", n_cores, " cores")
-
+    
     # Setting up parallel backend
     cl <- parallel::makeCluster(n_cores)
     doSNOW::registerDoSNOW(cl)
-
+    
     # Setting up progress bar
     pb <- utils::txtProgressBar(max = length(sample_sizes) * n_reps, style = 3)
     counter <- 0
@@ -322,142 +296,130 @@ fit_markov_model <- function(
       counter <<- counter + 1
       utils::setTxtProgressBar(pb, counter)
     })
-
+    
     # Export data to clusters
     parallel::clusterExport(
       cl,
-      varlist = c(
-        "data",
-        "split_ids", 
-        "create_individual_transition_matrices"
-        ),
+      varlist = c("data", "ids", "create_individual_transition_matrices"),
       envir = environment()
     )
-
+    
     # Set RNG seed for reproducible parallel execution
     if (!is.null(seed)) {
       doRNG::registerDoRNG(seed)
     }
-
+    
     # Process each sample size
     for (i in seq_along(sample_sizes)) {
       n <- sample_sizes[i]
-
+      
       rep_results <- foreach::foreach(
         reps = 1:n_reps,
         .packages = "nnet",
         .options.snow = opts
       ) %dorng%
         {
-          # ---- 1) Split IDs ---------------------------------------------------------
-          ids_all <- unique(data$ID)
-          split   <- split_ids(ids_all, test_prop = 0.2)
+          # Sample subjects (not individual observations) to maintain data structure
+          sample_ids <- sample(ids, size = n)
+          sample_data <- data[data$ID %in% sample_ids, ]
           
-          train_ids_all <- split$train_ids
-          test_ids      <- split$test_ids
+          # Calculate empirical transition probabilities
+          transitions <- table(From = sample_data$y_prev, To = sample_data$y)
+          obs_matrix <- round(prop.table(transitions, margin = 1), 2)
           
-          train_data_all <- data[data$ID %in% train_ids_all, ]
-          test_data      <- data[data$ID %in% test_ids, ]
+          # Create individual transition matrices for each subject
+          # idv_trans   = create_individual_transition_matrices(sample_data)
           
-          # ---- 2) Sample n training subjects ---------------------------------------
-          sample_ids  <- sample(train_ids_all, size = n)
-          train_data  <- train_data_all[train_data_all$ID %in% sample_ids, ]
-          
-          # ---- 3) Observed training transitions ------------------------------------
-          transitions <- table(From = train_data$y_prev, To = train_data$y)
-          obs_matrix  <- prop.table(transitions, margin = 1)
-
-          # ---- 4) Fit models --------------------------------------------------------
+          # Fit all models
           list(
             # Base models (no Markov dependency)
             base_null = nnet::multinom(
               y ~ 1,
-              data = train_data,
+              data = sample_data,
               trace = FALSE
             ),
             base_red1 = nnet::multinom(
               y ~ x1,
-              data = train_data,
+              data = sample_data,
               trace = FALSE
             ),
             base_red2 = nnet::multinom(
               y ~ x1 + x2,
-              data = train_data,
+              data = sample_data,
               trace = FALSE
             ),
             base_true = nnet::multinom(
               y ~ x1 + x2 + x3,
-              data = train_data,
+              data = sample_data,
               trace = FALSE
             ),
             base_of = nnet::multinom(
-              y ~ x1 + x2 + x3 + x4 + x5,
-              data = train_data,
+              y ~ x1 + x2 + x3 + x4,
+              data = sample_data,
               trace = FALSE
             ),
-
+            
             # Additive models (with y_prev)
             add_null = nnet::multinom(
               y ~ y_prev,
-              data = train_data,
+              data = sample_data,
               trace = FALSE
             ),
             add_red1 = nnet::multinom(
               y ~ x1 + y_prev,
-              data = train_data,
+              data = sample_data,
               trace = FALSE
             ),
             add_red2 = nnet::multinom(
               y ~ x1 + x2 + y_prev,
-              data = train_data,
+              data = sample_data,
               trace = FALSE
             ),
             add_true = nnet::multinom(
               y ~ x1 + x2 + x3 + y_prev,
-              data = train_data,
+              data = sample_data,
               trace = FALSE
             ),
             add_of = nnet::multinom(
-              y ~ x1 + x2 + x3 + x4 + x5 + y_prev,
-              data = train_data,
+              y ~ x1 + x2 + x3 + x4 + y_prev,
+              data = sample_data,
               trace = FALSE
             ),
-
+            
             # Multiplicative models (with interactions)
             mult_null = nnet::multinom(
               y ~ y_prev,
-              data = train_data,
+              data = sample_data,
               trace = FALSE
             ),
             mult_red1 = nnet::multinom(
               y ~ (x1 * y_prev),
-              data = train_data,
+              data = sample_data,
               trace = FALSE
             ),
             mult_red2 = nnet::multinom(
               y ~ (x1 + x2) * y_prev,
-              data = train_data,
+              data = sample_data,
               trace = FALSE
             ),
             mult_true = nnet::multinom(
               y ~ (x1 + x2 + x3) * y_prev,
-              data = train_data,
+              data = sample_data,
               trace = FALSE
             ),
             mult_of = nnet::multinom(
-              y ~ (x1 + x2 + x3 + x4 + x5) * y_prev,
-              data = train_data,
+              y ~ (x1 + x2 + x3 + x4) * y_prev,
+              data = sample_data,
               trace = FALSE
             ),
-
+            
             obs_matrix = obs_matrix,
-            idv_trans = create_individual_transition_matrices(test_data),
-
-            train_data = train_data,
-            test_data = test_data
+            idv_trans = create_individual_transition_matrices(sample_data),
+            
+            sample_data = sample_data
           )
         } # End of %dopar%
-
+      
       # Store results in organized structure
       results$base_models$null_models[[i]] <- lapply(
         rep_results,
@@ -480,7 +442,7 @@ fit_markov_model <- function(
         "base_true"
       )
       results$base_models$of_models[[i]] <- lapply(rep_results, `[[`, "base_of")
-
+      
       results$additive_models$null_models[[i]] <- lapply(
         rep_results,
         `[[`,
@@ -506,7 +468,7 @@ fit_markov_model <- function(
         `[[`,
         "add_of"
       )
-
+      
       results$multiplicative_models$null_models[[i]] <- lapply(
         rep_results,
         `[[`,
@@ -532,34 +494,33 @@ fit_markov_model <- function(
         `[[`,
         "mult_of"
       )
-
+      
       results$obs_trans[[i]] <- lapply(rep_results, `[[`, "obs_matrix")
       results$idv_trans[[i]] <- lapply(rep_results, `[[`, "idv_trans")
-      results$train_data[[i]] <- lapply(rep_results, `[[`, "train_data")
-      results$test_data[[i]] <- lapply(rep_results, `[[`, "test_data")
+      results$sample_data[[i]] <- lapply(rep_results, `[[`, "sample_data")
     } # End of for(i in seq_along(sample_sizes))
-
+    
     # closeAllConnections()
     parallel::stopCluster(cl)
   } else {
     # Serial execution ---------------------------------------------------------
     message("Running in serial mode ... ")
-
+    
     require(progress)
-
+    
     pb <- progress::progress_bar$new(
       format = " fitting [:bar] :percent (:current/:total) in :elapsed",
       total = length(sample_sizes),
       clear = FALSE,
       width = 60
     )
-
+    
     for (i in seq_along(sample_sizes)) {
       pb$tick()
       n <- sample_sizes[i]
-
+      
       rep_results <- fit_worker(n)
-
+      
       # Store results in organized structure
       results$base_models$null_models[[i]] <- lapply(
         rep_results,
@@ -582,7 +543,7 @@ fit_markov_model <- function(
         "base_true"
       )
       results$base_models$of_models[[i]] <- lapply(rep_results, `[[`, "base_of")
-
+      
       results$additive_models$null_models[[i]] <- lapply(
         rep_results,
         `[[`,
@@ -608,7 +569,7 @@ fit_markov_model <- function(
         `[[`,
         "add_of"
       )
-
+      
       results$multiplicative_models$null_models[[i]] <- lapply(
         rep_results,
         `[[`,
@@ -634,20 +595,19 @@ fit_markov_model <- function(
         `[[`,
         "mult_of"
       )
-
+      
       results$obs_trans[[i]] <- lapply(rep_results, `[[`, "obs_matrix")
       results$idv_trans[[i]] <- lapply(rep_results, `[[`, "idv_trans")
-      results$train_data[[i]] <- lapply(rep_results, `[[`, "train_data")
-      results$test_data[[i]] <- lapply(rep_results, `[[`, "test_data")
+      results$sample_data[[i]] <- lapply(rep_results, `[[`, "sample_data")
     } # End of for (i in seq_along(sample_sizes))
   }
-
+  
   # Add execution metadata to results
   # Add execution metadata to results
   results$meta_data$completion_time <- Sys.time()
   results$meta_data$seed_used <- seed
-
+  
   message("\nModel fitting completed successfully")
-
+  
   return(results)
 }

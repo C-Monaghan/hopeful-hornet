@@ -20,7 +20,7 @@ create_individual_transition_matrices <- function(data) {
     # Loop over each row (observation) for this individual
     for (j in seq_len(nrow(individual))) {
       # Define wave pair: from (previous wave) to (current wave)
-      from_wave <- as.character(as.numeric(individual$w[j]) - 1)
+      from_wave <- as.character(as.numeric(individual$w[j]))
       # from_wave <- as.character(as.numeric(individual$w[j]))
       to_wave <- as.character(individual$w[j])
 

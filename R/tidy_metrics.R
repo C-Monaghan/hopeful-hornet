@@ -33,6 +33,7 @@ tidy_metrics <- function(metrics) {
       metric == "RMSE"        , "Root Mean Square Error"      ,
       metric == "Correlation" , "Correlation Distance"        ,
       metric == "KL"          , "Kullback-Leibler Divergence" ,
+      metric == "Determinent" , "Determinent"                 ,
       metric == "aic"         , "AIC"                         ,
       metric == "bic"         , "BIC"                         ,
       default = metric
@@ -85,6 +86,7 @@ tidy_metrics <- function(metrics) {
         "Root Mean Square Error",
         "Correlation Distance",
         "Kullback-Leibler Divergence",
+        "Determinent",
         "AIC",
         "BIC"
       )
