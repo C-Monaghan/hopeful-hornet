@@ -34,9 +34,9 @@ message("Setting up data files ... ")
 
 scenarios <- tibble::tibble(
   path = c(
-    here::here("analysis/scenario_1/results/matrix_distances_2.fst"),
-    here::here("analysis/scenario_2/results/matrix_distances_2.fst"),
-    here::here("analysis/scenario_3/results/matrix_distances_2.fst")
+    here::here("analysis/scenario_1/results/matrix_distances_test.fst"),
+    here::here("analysis/scenario_2/results/matrix_distances_test.fst"),
+    here::here("analysis/scenario_3/results/matrix_distances_test.fst")
   ),
   parent_block = c("Base Models", "Additive Models", "Multiplicative Models")
 )
@@ -77,22 +77,23 @@ distances_true <- distances |> pull(data) |> data.table::rbindlist(use.names = T
 # Joining distances together ---------------------------------------------------
 message("Joining datasets together ... ")
 
-distances <- rbindlist(
-  list(distances_base, distances_add, distances_mult),
-  use.names = TRUE, fill = TRUE)
+# distances <- rbindlist(
+#   list(distances_base, distances_add, distances_mult),
+#   use.names = TRUE, fill = TRUE)
 
 # Summarising ------------------------------------------------------------------
 message("Summarising data ... ")
 
 # Grouping and summarizing metrics
 dist_sum <- distances_true[, .(value = mean(value)), by = .(parent_block, sub_block, size_label, rep, wave, metric)] |>
-  tibble::as_tibble() |>
-  filter(metric != "Kullback-Leibler Divergence")
+  tibble::as_tibble()
+  # filter(metric != "Kullback-Leibler Divergence")
 
 message("Finding best model ...")
 
 # Summarizing best model
 best_models <- dist_sum |>
+  filter(!stringr::str_detect(metric, "Absolute")) |>
   # Collapse the wave column
   group_by(parent_block, sub_block, size_label, rep, metric) |>
   summarise(value = mean(value), .groups = "drop") |>
@@ -115,7 +116,9 @@ best_models <- dist_sum |>
 # Plotting ---------------------------------------------------------------------
 message("Plotting model ... ")
 
+# Plotting ---------------------------------------------------------------------
 dis_bar <- best_models |>
+  filter(!stringr::str_detect(metric, "Absolute")) |>
   ggplot(aes(x = parent_block, y = prop, fill = sub_block)) +
   geom_col(colour = "black") + 
   geom_text(
@@ -132,9 +135,9 @@ dis_bar <- best_models |>
                "Reduced Model 2", "True Model", "Overfit Model")) +
   scale_y_continuous(labels = scales::percent_format()) +
   labs(
-    title = "Proportion of times when each model was identified as the best",
+    # title = "Proportion of times when each model was identified as the best",
     x = "Model Type",
-    y = "Proportion of Repetitions as best", 
+    y = "Proportion of repetitions identified as best", 
     fill = "Sub Model") +
   facet_grid(size_label ~ metric, space = "free", labeller = labeller(
     metric = c("Aic" = "Akaike Information Criterion",
@@ -145,10 +148,18 @@ message("Exporting data ... ")
 
 # Saving -----------------------------------------------------------------------
 cowplot::save_plot(
-  filename = here::here("plot.png"), plot = dis_bar, 
+  filename = here::here("paper/plot_test.png"), plot = dis_bar, 
   base_height = 10, base_width = 25)
 
 cowplot::save_plot(
-  filename = here::here("plot.pdf"), plot = dis_bar, 
+  filename = here::here("paper/plot_test.pdf"), plot = dis_bar, 
   base_height = 10, base_width = 25)
 
+# Saving data for later use
+saveRDS(
+  object = best_models, 
+  file = here::here("paper/best_models.RDS"))
+
+saveRDS(
+  object = dist_sum, 
+  file = here::here("paper/dis_sum.RDS"))

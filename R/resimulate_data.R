@@ -26,11 +26,11 @@ resimulate_data <- function(model_coefs, sim, scenario, num_tasks) {
 
                     tryCatch(
                       simulate_data(
-                        n_subjects = 549,
-                        n_waves = 4,
+                        n_subjects = 10000,
+                        n_waves = 3,
                         scenario = scenario,
                         resim = TRUE,
-                        og_data = sim,
+                        og_data = sim$data,
                         betas = betas,
                         seed = 123,
                         verbose = FALSE

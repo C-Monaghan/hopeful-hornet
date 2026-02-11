@@ -66,7 +66,7 @@ DataFrame compare_matrices_rcpp(const arma::mat& Obs,
         sum_abs/n,      // Mean absolute error
         rmse,           // Root mean square error
         (NumericVector::is_na(corr) ? NA_REAL : 1 - corr),       // 1 - Pearson correlation (interpreted as dissimilarity)
-        kl              // KL divergence
+        kl             // KL divergence
         )
   );
 }

@@ -33,7 +33,7 @@ source(here::here("R/tidy_metrics.R"))
 source(here::here("R/highlight_true.R"))
 
 # Data -------------------------------------------------------------------------
-path_scenario <- "./analysis/scenario_1/"
+path_scenario <- this.dir()
 
 true_model <- case_when(
   stringr::str_detect(string = path_scenario, pattern = "scenario_1") ~ "Base",
@@ -45,90 +45,90 @@ message("Reading in data ... ")
 
 # ~ 266 million rows (ooof...)
 distances <- fst::read.fst(
-  path = here::here(path_scenario, "results/matrix_distances.fst"), 
+  path = here::here(path_scenario, "results/matrix_distances_test.fst"), 
   as.data.table = TRUE) |> 
   tidy_metrics()
 
-# Model info
-models <- readRDS(here::here(path_scenario, "results/cache/models.RDS"))
-
-# Getting AIC and BIC data from models -----------------------------------------
-message("Joining AIC and BIC ... ")
-
-model_diagnostics <- rbindlist(lapply(names(models), function(parent) {
-  by_sub_block <- models[[parent]]
-  rbindlist(lapply(names(by_sub_block), function(sub_block) {
-    by_size <- by_sub_block[[sub_block]]
-    rbindlist(lapply(names(by_size), function(size) {
-      by_rep <- by_size[[size]]
-      rbindlist(lapply(seq_along(by_rep), function(rep_index) {
-        model <- by_rep[[rep_index]]
-        data.table(
-          parent_block = parent,
-          sub_block = sub_block,
-          size_label = size,
-          rep = as.character(rep_index),
-          Aic = AIC(model),
-          Bic = BIC(model)
-        )
-      }))
-    }))
-  }))
-}), use.names = TRUE, fill = TRUE) |>
-  tibble::as_tibble() |>
-  mutate(
-    parent_block = case_when(
-      parent_block == "base_models" ~ "Base Models",
-      parent_block == "additive_models" ~ "Additive Models",
-      parent_block == "multiplicative_models" ~ "Multiplicative Models"),
-    sub_block = case_when(
-      sub_block == "null_models" ~ "Null Model",
-      sub_block == "red_1_models" ~ "Reduced Model 1",
-      sub_block == "red_2_models" ~ "Reduced Model 2",
-      sub_block == "true_models" ~ "True Model",
-      sub_block == "of_models" ~ "Overfit Model"),
-    size_label = stringr::str_replace(size_label, "_", " = "))
-
-# Adding in AIC and BIC to metric data
-distances <- distances |>
-  tibble::as_tibble() |>
-  tidyr::pivot_wider(names_from = "metric", values_from = "value") |>
-  left_join(model_diagnostics, by = c("parent_block", "sub_block", "size_label", "rep")) |>
-  tidyr::pivot_longer(
-    cols = c(`Frobenius Distance`:Bic),
-    names_to = "metric",
-    values_to = "value")
-
-# Refactorising ----------------------------------------------------------------
-message("Refactorising ... ")
-
-distances <- distances |>
-  mutate(
-    parent_block = factor(
-      parent_block, 
-      levels = c("Base Models", "Additive Models", "Multiplicative Models")),
-    sub_block = factor(
-      sub_block, 
-      levels = c("Null Model", "Reduced Model 1", "Reduced Model 2", 
-                 "True Model", "Overfit Model")),
-    size_label = factor(
-      size_label,
-      levels = c("n = 100", "n = 250", "n = 1000", "n = 5000")),
-    metric = factor(
-      metric, 
-      levels = c("Frobenius Distance", "Manhattan Distance", "Max Difference", 
-                 "Mean Absolute Difference", "Root Mean Square Error", 
-                 "Correlation Distance", "Kullback-Leibler Divergence", 
-                 "Aic", "Bic"))
-  ) |>
-  as.data.table()
+# # Model info
+# models <- readRDS(here::here(path_scenario, "results/cache/models.RDS"))
+# 
+# # Getting AIC and BIC data from models -----------------------------------------
+# message("Joining AIC and BIC ... ")
+# 
+# model_diagnostics <- rbindlist(lapply(names(models), function(parent) {
+#   by_sub_block <- models[[parent]]
+#   rbindlist(lapply(names(by_sub_block), function(sub_block) {
+#     by_size <- by_sub_block[[sub_block]]
+#     rbindlist(lapply(names(by_size), function(size) {
+#       by_rep <- by_size[[size]]
+#       rbindlist(lapply(seq_along(by_rep), function(rep_index) {
+#         model <- by_rep[[rep_index]]
+#         data.table(
+#           parent_block = parent,
+#           sub_block = sub_block,
+#           size_label = size,
+#           rep = as.character(rep_index),
+#           Aic = AIC(model),
+#           Bic = BIC(model)
+#         )
+#       }))
+#     }))
+#   }))
+# }), use.names = TRUE, fill = TRUE) |>
+#   tibble::as_tibble() |>
+#   mutate(
+#     parent_block = case_when(
+#       parent_block == "base_models" ~ "Base Models",
+#       parent_block == "additive_models" ~ "Additive Models",
+#       parent_block == "multiplicative_models" ~ "Multiplicative Models"),
+#     sub_block = case_when(
+#       sub_block == "null_models" ~ "Null Model",
+#       sub_block == "red_1_models" ~ "Reduced Model 1",
+#       sub_block == "red_2_models" ~ "Reduced Model 2",
+#       sub_block == "true_models" ~ "True Model",
+#       sub_block == "of_models" ~ "Overfit Model"),
+#     size_label = stringr::str_replace(size_label, "_", " = "))
+# 
+# # Adding in AIC and BIC to metric data
+# distances <- distances |>
+#   tibble::as_tibble() |>
+#   tidyr::pivot_wider(names_from = "metric", values_from = "value") |>
+#   left_join(model_diagnostics, by = c("parent_block", "sub_block", "size_label", "rep")) |>
+#   tidyr::pivot_longer(
+#     cols = c(`Frobenius Distance`:Bic),
+#     names_to = "metric",
+#     values_to = "value")
+# 
+# # Refactorising ----------------------------------------------------------------
+# message("Refactorising ... ")
+# 
+# distances <- distances |>
+#   mutate(
+#     parent_block = factor(
+#       parent_block, 
+#       levels = c("Base Models", "Additive Models", "Multiplicative Models")),
+#     sub_block = factor(
+#       sub_block, 
+#       levels = c("Null Model", "Reduced Model 1", "Reduced Model 2", 
+#                  "True Model", "Overfit Model")),
+#     size_label = factor(
+#       size_label,
+#       levels = c("n = 100", "n = 250", "n = 1000", "n = 5000")),
+#     metric = factor(
+#       metric, 
+#       levels = c("Frobenius Distance", "Manhattan Distance", "Max Difference", 
+#                  "Mean Absolute Difference", "Root Mean Square Error", 
+#                  "Correlation Distance", "Kullback-Leibler Divergence", 
+#                  "Aic", "Bic"))
+#   ) |>
+#   as.data.table()
 
 message("Summarising data ... ")
 
 # Grouping and summarizing metrics
 dist_sum <- distances[, .(value = mean(value)), by = .(parent_block, sub_block, size_label, rep, wave, metric)] |>
-  tibble::as_tibble() |>
-  filter(metric != "Kullback-Leibler Divergence")
+  tibble::as_tibble()
+  # filter(metric != "Kullback-Leibler Divergence")
 
 # Highlighting the "true model"
 dist_sum <- dist_sum |> 
@@ -162,6 +162,7 @@ message("Plotting ... ")
 
 # Plotting ---------------------------------------------------------------------
 dis_box <- dist_sum |>
+  filter(!stringr::str_detect(metric, "Absolute")) |>
   ggplot(aes(x = value, y = sub_block, fill = fill)) +
   geom_boxplot(
     aes(colour = (fill == "True"), size = (fill == "True")),
@@ -191,6 +192,7 @@ dis_box <- dist_sum |>
   ))
 
 dis_bar <- best_models |>
+  filter(!stringr::str_detect(metric, "Absolute")) |>
   ggplot(aes(x = parent_block, y = prop, fill = fill)) +
   geom_col(colour = "black") + 
   geom_text(
@@ -221,26 +223,26 @@ message("Exporting data ... ")
 # Saving -----------------------------------------------------------------------
 # As png
 cowplot::save_plot(
-  filename = here::here(path_scenario, "results/figures/distances_box.png"),
+  filename = here::here(path_scenario, "results/figures/test/distances_box.png"),
   plot = dis_box,
   base_height = 10, 
   base_width = 25)
 
 cowplot::save_plot(
-  filename = here::here(path_scenario, "results/figures/distances_bar.png"),
+  filename = here::here(path_scenario, "results/figures/test/distances_bar.png"),
   plot = dis_bar,
   base_height = 10, 
   base_width = 25)
 
 # As pdf
 cowplot::save_plot(
-  filename = here::here(path_scenario, "results/figures/distances_box.pdf"),
+  filename = here::here(path_scenario, "results/figures/test/distances_box.pdf"),
   plot = dis_box,
   base_height = 10, 
   base_width = 25)
 
 cowplot::save_plot(
-  filename = here::here(path_scenario, "results/figures/distances_bar.pdf"),
+  filename = here::here(path_scenario, "results/figures/test/distances_bar.pdf"),
   plot = dis_bar,
   base_height = 10, 
   base_width = 25)

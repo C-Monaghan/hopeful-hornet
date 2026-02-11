@@ -3,7 +3,9 @@
 
 # rm(list = ls()); gc()
 
-set.seed(86825936)
+message("Setting up ...")
+
+set.seed(4321)
 
 # Packages ---------------------------------------------------------------------
 library(dplyr)
@@ -42,24 +44,9 @@ theme_simulation <- function() {
 }
 
 # Data -------------------------------------------------------------------------
-data <- readRDS(here::here("analysis/case_study/data/HRS.RDS")) |>
-  janitor::clean_names() |>
-  rename(ID = id) |>
-  mutate(
-    x3 = ifelse(x3 > 186, NA, x3),
-    x3 = case_when(
-      is.na(x3) & w == 2 ~ 78.44,
-      is.na(x3) & w == 3 ~ 79.16,
-      TRUE ~ x3
-    ),
-    x4 = ifelse(is.na(x4), 1.66, x4),
-    x5 = case_when(
-      is.na(x5) & w == 2 ~ 84.4, is.na(x5) & w == 3 ~ 83.3,
-      x5 <= 0 & w == 2 ~ 84.4, x5 <= 0 & w == 3 ~ 83.3,
-      x5 >= 200 & w == 2 ~ 84.4, x5 >= 200 & w == 2 ~ 83.3,
-      TRUE ~ x5
-    )
-  )
+message("Reading in data ...")
+
+data <- readRDS(here::here("analysis/case_study/data/HRS.RDS"))
 
 # Applying DTMC model ----------------------------------------------------------
 message("Fitting Markov Model")
@@ -69,7 +56,7 @@ models <- fit_markov_model(
   sample_sizes = c(100, 250, 1000, 5000),
   n_reps = 200,
   parallel = TRUE,
-  seed = 86825936
+  seed = 4321
 )
 
 # Extract β‑lists -----------------------------------------------------------
@@ -80,27 +67,6 @@ model_fits <- models[c(
   "additive_models",
   "multiplicative_models"
 )]
-
-model_coefs <- imap(model_fits, function(by_sub_blocks, parent) {
-  imap(by_sub_blocks, function(by_sizes, sub_blocks) {
-    imap(by_sizes, function(by_fit_list, size_labels) {
-      map(by_fit_list, extract_betas)
-    })
-  })
-})
-
-# Extract PIDs into a single tibble -----------------------------------------
-pids_df <- imap(models$idv_trans, function(by_reps, size_label) {
-  imap(by_reps, function(by_pid_list, rep) {
-    tibble(
-      ID = as.numeric(stringr::str_remove(names(by_pid_list), "^p_")),
-      size_label = size_label,
-      rep = as.character(rep)
-    )
-  })
-}) |>
-  list_flatten() |>
-  bind_rows()
 
 # Save observed transitions (P) ------------------------------------------------
 message("Calculating observed transitions ...")
@@ -124,48 +90,41 @@ obs_tibble <- imap(models$idv_trans, function(sample_size, size) {
 }) |>
   bind_rows()
 
-# Create predicted transition matrix (P hat)
+# Create predicted transition matrix (P hat) -----------------------------------
 ## Creating an augmented dataset
 message("Creating an augmented dataset ...")
 
-augmented_data <- imap(models$sample_data, function(sample_size, size) {
-  imap(sample_size, function(data, rep) {
-    
-    # Filter down to those used in model
-    data_filter <- data |> 
-      mutate(size_label = size, rep = as.character(rep)) |>
-      semi_join(pids_df, by = c("ID", "size_label", "rep"))
-    
+augmented_data <- models |>
+  pluck("test_data") |>
+  imap(function(sample_size, size) {
+  imap(sample_size, function(rep_data, rep) {
     # Augment their data-points
     data_augment <- bind_rows(
-      mutate(data_filter, y_prev = factor(1)),
-      mutate(data_filter, y_prev = factor(2)),
-      mutate(data_filter, y_prev = factor(3))
+      mutate(rep_data, y_prev = factor(1)),
+      mutate(rep_data, y_prev = factor(2)),
+      mutate(rep_data, y_prev = factor(3))
     ) |>
       arrange(ID, w) |>
-      rename(size = size_label)
+      mutate(size_label = size)
   
       return(data_augment)
     })
-  }) |> bind_rows()
+  })
 
 ## Predicting transition probabilities from this augmented data
 message("Calculating predicting transition probabilities ...")
 
 prediction_matrices <- imap(model_fits, function(parent_block, parent) {
   imap(parent_block, function(sub_block, sub_model) {
-    imap(sub_block, function(sample_size, size_label) {
-      imap(sample_size, function(model, reps) {
+    imap(sub_block, function(sample_size, size) {
+      imap(sample_size, function(model, rep_index) {
         
-        ## Filter to the participants used in the sample
-        data_filter <- augmented_data |>
-          filter(size %in% size_label, rep %in% reps)
-        
-        ## Get their IDS (for later)
-        ids <- data_filter |> pull(ID) |> unique()
+        # Get associated augmented data file & IDs
+        pred_data <- augmented_data[[size]][[rep_index]]
+        ids <- pred_data |> pull(ID) |> unique()
         
         ## Predict y value probabilities
-        probs <- predict(model, newdata = data_filter, type = "probs")
+        probs <- predict(model, newdata = pred_data, type = "probs")
 
         ## Split into 3x3 matrices
         split_rows <- split(
@@ -220,6 +179,8 @@ iwalk(prediction_matrices, function(parent_block, parent) {
   })
 })
 
+message("Making into a tibble ...")
+
 predicted_trans_tibble <- tidyr::as_tibble(rbindlist(
   rows, use.names = TRUE, fill = TRUE)) |> 
   mutate(ID = as.numeric(ID))
@@ -234,11 +195,10 @@ transition_tibble <- predicted_trans_tibble |>
 # Matrix distance calculations -------------------------------------------------
 num_tasks <- nrow(transition_tibble)
 
-pb <- txtProgressBar(min = 0, max = num_tasks, style = 3)
+message("Running matrix distance calculations ... ")
 
 results_list <- vector("list", length = num_tasks)
-
-message("Running matrix distance calculations ... ")
+pb <- txtProgressBar(min = 0, max = num_tasks, style = 3)
 
 # 5. Calculating matrix distances ----------------------------------------------
 for (i in seq_len(num_tasks)) {
@@ -317,8 +277,7 @@ dist_sum <- distances[,
   .(value = mean(value)),
   by = .(parent_block, sub_block, size_label, rep, wave, metric)
 ] |>
-  tibble::as_tibble() |>
-  filter(metric != "Kullback-Leibler Divergence")
+  tibble::as_tibble()
 
 best_models <- dist_sum |>
   # Collapse the wave column
@@ -343,13 +302,14 @@ best_models <- dist_sum |>
 message("Plotting ... ")
 
 case_study_plot <- best_models |>
+  filter(!stringr::str_detect(metric, "Absolute")) |>
   ggplot(aes(x = parent_block, y = prop, fill = sub_block)) +
   geom_col(colour = "black") +
-  # geom_text(
-  #   aes(label = ifelse(prop >= 0.04, scales::percent(prop, accuracy = 1), NA)),
-  #   position = position_stack(vjust = 0.5),
-  #   size = 3
-  # ) +
+  geom_text(
+    aes(label = ifelse(prop >= 0.04, scales::percent(prop, accuracy = 1), NA)),
+    position = position_stack(vjust = 0.5),
+    size = 3
+  ) +
   scale_fill_manual(
     values = c(
       "Null Model" = "#E69F00",
@@ -396,7 +356,7 @@ message("Exporting ... ")
 
 # Save PDF version of plot
 cowplot::save_plot(
-  filename = here::here("analysis/case_study/results/figure 2a.pdf"),
+  filename = here::here("analysis/case_study/results/figure 2a_red.pdf"),
   plot = case_study_plot,
   base_width = 25,
   base_height = 10
@@ -405,5 +365,10 @@ cowplot::save_plot(
 # Save RDS version of plot
 saveRDS(
   object = case_study_plot,
-  here::here("analysis/case_study/results/figure_2a.RDS")
+  here::here("analysis/case_study/results/figure_2.RDS")
 )
+
+saveRDS(
+  object = best_models, 
+  here::here("analysis/case_study/results/best_models.RDS")
+  )
