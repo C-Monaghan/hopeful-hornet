@@ -94,10 +94,20 @@ obs_tibble <- imap(models$idv_trans, function(sample_size, size) {
 ## Creating an augmented dataset
 message("Creating an augmented dataset ...")
 
+<<<<<<< HEAD
 augmented_data <- models |>
   pluck("test_data") |>
   imap(function(sample_size, size) {
   imap(sample_size, function(rep_data, rep) {
+=======
+augmented_data <- imap(models$sample_data, function(sample_size, size) {
+  imap(sample_size, function(data, rep) {
+    # Filter down to those used in model
+    data_filter <- data |>
+      mutate(size_label = size, rep = as.character(rep)) |>
+      semi_join(pids_df, by = c("ID", "size_label", "rep"))
+
+>>>>>>> c3255e8b4e679b2f8610d391767168879a99af72
     # Augment their data-points
     data_augment <- bind_rows(
       mutate(rep_data, y_prev = factor(1)),
@@ -105,17 +115,27 @@ augmented_data <- models |>
       mutate(rep_data, y_prev = factor(3))
     ) |>
       arrange(ID, w) |>
+<<<<<<< HEAD
       mutate(size_label = size)
   
       return(data_augment)
     })
   })
+=======
+      rename(size = size_label)
+
+    return(data_augment)
+  })
+}) |>
+  bind_rows()
+>>>>>>> c3255e8b4e679b2f8610d391767168879a99af72
 
 ## Predicting transition probabilities from this augmented data
 message("Calculating predicting transition probabilities ...")
 
 prediction_matrices <- imap(model_fits, function(parent_block, parent) {
   imap(parent_block, function(sub_block, sub_model) {
+<<<<<<< HEAD
     imap(sub_block, function(sample_size, size) {
       imap(sample_size, function(model, rep_index) {
         
@@ -123,6 +143,17 @@ prediction_matrices <- imap(model_fits, function(parent_block, parent) {
         pred_data <- augmented_data[[size]][[rep_index]]
         ids <- pred_data |> pull(ID) |> unique()
         
+=======
+    imap(sub_block, function(sample_size, size_label) {
+      imap(sample_size, function(model, reps) {
+        ## Filter to the participants used in the sample
+        data_filter <- augmented_data |>
+          filter(size %in% size_label, rep %in% reps)
+
+        ## Get their IDS (for later)
+        ids <- data_filter |> pull(ID) |> unique()
+
+>>>>>>> c3255e8b4e679b2f8610d391767168879a99af72
         ## Predict y value probabilities
         probs <- predict(model, newdata = pred_data, type = "probs")
 
@@ -171,7 +202,7 @@ iwalk(prediction_matrices, function(parent_block, parent) {
             rep = reps,
             sim_mat = list(probs)
           )
-          
+
           i <<- i + 1L
         })
       })
@@ -182,7 +213,10 @@ iwalk(prediction_matrices, function(parent_block, parent) {
 message("Making into a tibble ...")
 
 predicted_trans_tibble <- tidyr::as_tibble(rbindlist(
-  rows, use.names = TRUE, fill = TRUE)) |> 
+  rows,
+  use.names = TRUE,
+  fill = TRUE
+)) |>
   mutate(ID = as.numeric(ID))
 
 # Join both tibbles
@@ -213,7 +247,7 @@ for (i in seq_len(num_tasks)) {
       NULL
     }
   )
-  
+
   # Update progress bar
   setTxtProgressBar(pb, i)
 }
@@ -327,11 +361,12 @@ case_study_plot <- best_models |>
       "Overfit Model"
     ),
     labels = c(
-      "Intercept only", 
-      "y ~ x1", 
-      "y ~ x1 + x2", 
-      "y ~ x1 + x2 + x3", 
-      "y ~ x1 + x2 + x3 + x4 + x5")
+      "Intercept only",
+      "y ~ x1",
+      "y ~ x1 + x2",
+      "y ~ x1 + x2 + x3",
+      "y ~ x1 + x2 + x3 + x4 + x5"
+    )
   ) +
   scale_y_continuous(labels = scales::percent_format()) +
   labs(
