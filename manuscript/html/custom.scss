@@ -1,3 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Libre+Franklin:ital,wght@0,100..900;1,100..900&display=swap');
+
+/*-- scss:defaults --*/
+$font-family-sans-serif:      Libre Franklin, sans-serif !default;
+$font-family-serif:           Libre Franklin, sans-serif !default;  /* Not actually a serif font but whatever */
+
 /*-- scss:rules --*/
 
 #title-block-header {

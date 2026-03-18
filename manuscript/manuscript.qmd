@@ -1,6 +1,6 @@
 ---
-title: "Goodness of fit diagnostics for Markov models"
-date: "2025-11-27"
+title: "Discrete time Markov models of cognitive transitions: Assessing goodness of fit"
+date: "2026-03-18"
 author:
   - name: Cormac Monaghan
     url: https://c-monaghan.github.io/
@@ -27,13 +27,18 @@ author:
     affiliation:
       id: 1
       name: Maynooth University
+abstract: |
+  Dementia progression is often described as movement between discrete cognitive states, such as normal cognition, mild cognitive impairment, and dementia. Markov models are widely used to analyze such transitions and to estimate the probability of moving between cognitive states over time. However, assessing how well these models capture the underlying transition dynamics is challenging. Conventional likelihood-based criteria evaluate overall model fit but may not adequately reflect whether a model accurately reproduces the observed transition structure. This study proposes and evaluates a transition-based goodness-of-fit framework for discrete-time Markov models. We conducted a simulation study across four sample sizes (100, 250, 1000, 5000). Differences between observed and model-based transition matrices were quantified using several matrix distance metrics and compared with likelihood-based criteria. The proposed approach was also illustrated in a case study examining transitions between cognitive states in dementia. Distance-based metrics distinguished models based on how well they reproduced the true transition structure. When models included state dependence or interaction effects, these metrics more often identified better-performing models. At smaller sample sizes, the Manhattan distance and Kullback–Leibler divergence selected models that best matched the true transition patterns more frequently than AIC or BIC. Similar patterns were observed in the case study. Evaluating how closely models reproduce observed state transitions can provide useful information beyond traditional likelihood-based criteria. Distance-based measures may therefore complement conventional approaches when assessing Markov models of dementia progression and other multi-state processes.
+additional-info: |
+  **Data Availability:** All R code is publicly available at <https://github.com/C-Monaghan/hopeful-hornet>
+keywords:
+  - Dementia risk
+  - Simulation
+  - Markov models
+published: "This manuscript is a preprint and is currently under review at ... "
+code-repo: " All R code is publicly available at  <https://github.com/C-Monaghan/hopeful-hornet>"
 bibliography: references.bib
 csl: files/apa.csl
-wordcount: "5000 words"
-keep-typ: true
-# format:
-  # docx:
-    # reference-doc: _extensions/C-Monaghan/shifu/styles/reference.docx
 ---
 
 ```{r}
@@ -99,42 +104,35 @@ theme_simulation <- function() {
     )
 }
 
-# RDS files
+# Data files needed to make plots ----------------------------------------------
 fig_1 <- readRDS(here::here("files/figures/fig_1.RDS"))
 fig_2 <- readRDS(here::here("files/figures/fig_2.RDS"))
 ```
 
+::: {.content-visible when-format="html"}
 # Introduction {.hide}
+:::
 
-Dementia is a neurogenerative disease characterized by progressive deterioration in cognitive ability [@prince2013a]. Mathematically, this progression can be represented as a sequence of $K$ mutually exclusive states such that $S = \{1, 2, \dots K\}$ beginning with a preclinical or asymptomatic period, transitioning through an intermediate stage such as mild cognitive impairment (MCI), and culminating in dementia [@sanz-blasco2022]. Understanding these transitions is central to epidemiological forecasting, intervention evaluation, and the design of health and social care services.
+Dementia is a neurogenerative disease characterized by progressive deterioration in cognitive ability [@prince2013a], often beginning with a preclinical or asymptomatic period, transitioning through an intermediate stage such as mild cognitive impairment (MCI), and culminating in dementia [@sanz-blasco2022]. Statistically, this progression of cognitive states can be represented as a sequence of $K$ mutually exclusive response categories such that $S = \{1, 2, \dots K\}$. Understanding these transitions is central to epidemiological forecasting, intervention evaluation, and the design of health and social care services [@spackman2012; @tahamimonfared2023].
 
-Because progression unfolds over time and involves movement between discrete, observable states, Markov models have become a widely used methodological tool for studying dementia trajectories [@costa2023; @salazar2007; @sanz-blasco2022; @wei2014; @williams2020; @yu2013a]. Within these models, the cognitive state of individual $i$ at time $t$, denoted $Y_{i,t} \in S$, is represented as a stochastic process governed by the Markov property [@zhang2010]:
+Because dementia progression unfolds over time and involves movement between discrete, observable states, Markov models have become common in the field [@costa2023; @salazar2007; @sanz-blasco2022; @tahamimonfared2023; @wei2014; @williams2020; @yu2013a]. Within Markov models, the cognitive state of individual $i$ at time $t$, denoted $Y_{i,t} \in S$, is represented as a stochastic process governed by the Markov property [@zhang2010]:
 $$
-P(Y_{i, t+1} = k \; \vert Y_{i, t} = j, Y_{i, t-1} = j_{t-1}, \dots Y_{i0} = j_0) = P(Y_{i, t+1} = k \; \vert \; Y_{i, t} = j).
+\begin{align}
+p_{jk}(t, t+1) &= P(Y_{i, t+1} = k \; \vert Y_{i, t} = j, Y_{i, t-1} = j_{t-1}, \dots Y_{i,0} = j_0) \\
+&= P(Y_{i, t+1} = k \; \vert \; Y_{i, t} = j)
+\end{align}
 $$ {#eq-markov-property}
 
-This property asserts that the probability of transitioning from state $j$ to state $k$ depends only on the current state $Y_{i,t}$ and not on the full history of preceding states $\{Y_{i, t-1}, \dots, Y_{i0}\}$.  Under this assumption, Markov models offer a flexible framework for estimating transition probabilities $p_{jk}$, describing the likelihood of movement from state $j$ to state $k$ over a fixed time interval.
+This property asserts that the probability of transitioning from state $j$ to state $k$ depends only on the current state $Y_{i,t}$ and not on the full history of preceding states $\{Y_{i, t-1}, \dots, Y_{i0}\}$.  Under this assumption, Markov models offer a flexible framework for estimating transition probabilities $p_{jk}(t, t+1)$, describing the likelihood of movement from state $j$ to state $k$ over a fixed time interval.
 
-Despite their widespread use, several practical challenges arise when applying Markov models in dementia research. Firstly, Markov models can be formulated in either continuous or discrete time, but many longitudinal cohort studies collect observations at discrete intervals (e.g., annual or biennial assessments). Although R [@R2025] provides a well-developed ecosystem for fitting continuous-time Markov models [@jackson2011; @ucar2019], dedicated tools for discrete-time Markov models are less developed. Existing packages such as `DTMCPack` [@nicholson2013] and `markovchain` [@spedicato2017] are useful but do not support covariate-dependent discrete-time transitions. Consequently, a common approach is to estimate the transition probabilities using a multinomial logistic regression model (see @spackman2012 as an example), treating the state at time $t+1$ as a categorical outcome conditional on the state at time $t$. Within this framework, the transition probabilities from state $j$ are modeled as:
+Despite their widespread use, an important methodological challenge remains in the application of Markov models. This challenge being, how to assess whether a fitted Markov model adequately represents the transition dynamics observed in the data. In dementia research, transition models are frequently used to estimate disease progression rates and evaluate potential interventions [@sanz-blasco2022; @spackman2012]. If the transition structure of a model is poorly specified, these downstream estimates may be biased, potentially leading to misleading conclusions about disease progression or healthcare planning. Consequently, reliable tools for assessing the goodness-of-fit of transition-based models are essential for ensuring that estimated transition probabilities faithfully reflect the patterns observed in longitudinal data.
+
+In practice, Markov models can be formulated in either continuous or discrete time. However, many longitudinal cohort studies collect observations at discrete intervals, such as annual or biennial assessments. Although `R` [@R2025] provides a well-developed ecosystem for fitting continuous-time Markov models [@jackson2011; @ucar2019], dedicated tools for discrete-time Markov models are less developed. Existing packages such as `DTMCPack` [@nicholson2013] and `markovchain` [@spedicato2017] are useful but do not support covariate-dependent discrete-time transitions. Consequently, a common approach is to estimate the transition probabilities using a multinomial logistic regression model (see @spackman2012 as an example), treating the state at time $t+1$ as a categorical outcome conditional on the state at time $t$, which is entered as an additional covariate in the model (a derivation of such probabilities is provided in supplementary materials).
+
+Within this framework, the fitted model produces a set of transition probabilities rather than direct predictions of observed outcomes. For a system with $K$ states, these probabilities are represented by a $K \times K$ transition probability matrix $\mathbf{P}$, where each element $p_{jk}$ represents the probability of transitioning from state $j$ at time $t$ to state $k$ at time $t+1$:
+
 $$
-log(\frac{p_{jk} (\mathbf{z_{i,t}})}{p_{j1} (\mathbf{z_{i,t}})}) = \alpha_{jk} + \mathbf{z}^\intercal_{i,t} \beta_{jk} \qquad k = 2, \dots, K,
-$$ {#eq-multinomial-formula}
-
-where $p_{j1}$ is the reference probability (e.g., remaining in state $j$), $\alpha_{jk}$ is a state-pair specific intercept, and $\beta_{jk}$ is a vector of coefficients for covariates $\mathbf{z}_{i,t}$ (of which $Y_{i,t}$ is inclusive).
-
-However, while estimating covariate-dependent transition probabilities is straightforward using multinomial models, such that for a non-reference category,
-$$
-p_{jk}(\mathbf{z}_{i,t}) = \frac{\exp(\eta^{(k)}_{i,t})}{1 + \sum_{\ell = 2}^{K} \exp(\eta^{(\ell)}_{i,t})}, \qquad \text{for } k = 2, 3
-$$ {#eq-non-reference-probability}
-
-and for the reference category,
-$$
-p_{j1}(\mathbf{z}_{i,t}) = \frac{1}{1 - \sum^{J-1}_{j=1}\exp(\eta^{(j)}_{i,t})}
-$$ {#eq-reference-probability}
-
-where $\eta^{(k)}_{i,t} = \alpha_{jk} + \mathbf{z}_{i,t}^\top \beta_{jk}$, diagnostic analysis and evaluating the goodness of fit of these Markov models remains an methodological challenge and is subject to ongoing research [@araripe2024]. Unlike conventional regression frameworks, where a direct comparison is made between observed $(y)$ and predicted $(\hat{y})$ values, the output of a Markov model is a set of transition probabilities. For a model with the $K$ states these probabilities are represented by a $K \times K$ transition probability matrix $\mathbf{P}$, where each element $p_{jk}$ is the probability of transitioning from state $j$ at time $t$ to state $k$ at time $t+1$:
-$$
-P =
+\mathbf{P(t, t+1)} =
 \begin{pmatrix}
 p_{11} & p_{12} & \dots  & p_{1K} \\
 p_{21} & p_{22} & \dots  & p_{2K} \\
@@ -143,65 +141,61 @@ p_{K1} & p_{K2} & \dots  & p_{KK}
 \end{pmatrix}.
 $$
 
-Since an observed transition is a stochastic realization from this probability distribution, there is no direct analogue to prediction error or residuals that cleanly links observed transitions to model-implied transition mechanisms. Existing methods, such as likelihood-ratio tests, information criteria, or simulation envelopes, provide valuable but partial insights. They often fail to provide a comprehensive, quantitative measure of how well the aggregate transition structure of the fitted transition probability matrix replicates the empirical dynamics observed within the cohort data.
+Unlike standard regression models, evaluating goodness-of-fit in this setting is not straightforward [@araripe2024]. Since an observed transition is a stochastic realization from this probability distribution, there is no direct analogue to prediction error or residuals that links observed transitions to model-implied transition mechanisms. In other words, we observe only the state that actually occurred, rather than the full set of probabilities assigned to all possible transitions. As a result, familiar diagnostic tools based on residuals or prediction errors are not directly applicable. Existing methods, such as deviance/likelihood-ratio tests, information criteria, or simulation envelopes, provide partial insights into the fitted model. They often fail to provide a comprehensive, quantitative measure of how well the aggregate transition structure of the fitted transition probability matrix replicates the empirical transition matrix observed within the data.
 
 ## Distance metrics
 
-To address this gap, a natural approach is to compare the empirical transition structure observed in the data with the model-implied transition structure produced by the fitted model. Let $\mathbf{P}$ denote the empirical transition matrix estimated directly from the observed transitions, and let $\hat{\mathbf{P}}$ denote the corresponding transition matrix estimated by fitting a Markov model. The central question then becomes: "How different is $\hat{\mathbf{P}}$ from $\mathbf{P}$?". In univariate models, a simple way of measuring this difference is by calculating a residual, which typically relies on the signed unidimensional distance between an observation and a fitted value (e.g., $y - \hat{y}$). However, determining the best way to measure a distance between two matrices is less trivial.
+To address this gap, a natural approach is to compare the empirical transition structure observed in the data with the model-implied transition structure produced by the fitted model. Let $\mathbf{P}$ denote the empirical transition matrix obtained directly from the observed transitions, and let $\hat{\mathbf{P}}$ denote the corresponding transition matrix estimated by fitting a Markov model. The central question then becomes: "How different is $\hat{\mathbf{P}}$ from $\mathbf{P}$?". In univariate models, a simple way of measuring this difference is by calculating a residual, which typically relies on the signed unidimensional distance between an observation and a fitted value (e.g., $y - \hat{y}$). However, determining the best way to measure a distance between two matrices is less trivial.
 
-Distance-based metrics provide a principled way to quantify discrepancies between two transition matrices. These metrics treat the transition matrix as a $K \times K$ object whose structure can be assessed globally, rather than focusing on individual probabilities in isolation. Let $\mathbf{D} = \mathbf{P} - \hat{\mathbf{P}}$ denote the matrix of element-wise differences. Several matrix norms and divergence measures can then be used to summarize the magnitude of discrepancy, each emphasizing different structural features of the transition process. For the purpose of this paper we focus on six of these distance measures which are summarized in @tbl-metrics. In addition, we compare these measures against current benchmark information criteria (AIC and BIC) within simulation studies whose complete setup is explained in the Methods section.
+Distance-based metrics provide a principled way to quantify discrepancies between two transition matrices. These metrics treat the transition matrix as a $K \times K$ object whose structure can be assessed globally, rather than focusing on individual probabilities in isolation. Let $\mathbf{D} = \mathbf{P} - \hat{\mathbf{P}}$ denote the matrix of element-wise differences ($d_{jk} = p_{jk} - \hat{p}_{jk})$). Several matrix norms and divergence measures can then be used to summarize the magnitude of discrepancy, each emphasizing different structural features of the transition process. In this study we compare six of these distance measures and compare their performance against current benchmark information criteria (AIC and BIC) using simulation experiments motivated by dementia progression modelling. Specifically, we examine how well these metrics identify models that accurately reproduce the underlying transition dynamics across varying sample sizes and levels of model misspecification. The metrics considered are summarized in @tbl-metrics.
 
 ```{r}
 #| label: tbl-metrics
-#| tbl-cap: "Distance based metrics and information crietia used in study"
+#| tbl-cap: "Distance based metrics and information crietia used in simulation study."
 #| include: true
 
 # Metrics
 metrics <- tribble(
-  ~Metric                                                                                                             ,
-  ~Definition                                                                                                         ,
-  ~Formula                                                                                                            ,
-  "Frobenius norm"                                                                                                    ,
-  "Square root of the sum of squared element-wise differences."                                                       ,
-  "$||\\mathbf{D}||_F = \\sqrt{\\sum_{j=1}^{K}\\sum_{k=1}^{K} d_{j,k}^2}$"                                            ,
+  ~Metric                                                                                                          ,
+  ~Definition                                                                                                      ,
+  ~Formula                                                                                                         ,
+  "Frobenius norm"                                                                                                 ,
+  "Square root of the sum of squared element-wise differences."                                                    ,
+  "$||\\mathbf{D}||_F = \\sqrt{\\sum_{j=1}^{K}\\sum_{k=1}^{K} d_{j,k}^2}$"                                         ,
 
-  "Manhattan distance"                                                                                                ,
-  "Sum of absolute element-wise differences."                                                                         ,
-  "$\\sum_{j=1}^{K}\\sum_{k=1}^{K} |d_{j,k}|$"                                                                        ,
+  "Manhattan distance"                                                                                             ,
+  "Sum of absolute element-wise differences."                                                                      ,
+  "$\\sum_{j=1}^{K}\\sum_{k=1}^{K} |d_{j,k}|$"                                                                     ,
 
-  "Maximum absolute error"                                                                                            ,
-  "Largest absolute element-wise discrepancy."                                                                        ,
-  "$\\max_{j,k} |d_{j,k}|$"                                                                                           ,
+  "Maximum absolute error"                                                                                         ,
+  "Largest absolute element-wise discrepancy."                                                                     ,
+  "$\\max_{j,k} |d_{j,k}|$"                                                                                        ,
 
-  # "Mean absolute error"                                                           ,
-  # "Average absolute difference across all entries."                               ,
-  # "$\\frac{1}{K^2} \\sum_{j=1}^{K}\\sum_{k=1}^{K} |d_{j,k}|$"                     ,
+  "Root mean squared error"                                                                                        ,
+  "Square root of the mean squared differences."                                                                   ,
+  "$\\sqrt{ \\frac{1}{K^2} \\sum_{j=1}^{K}\\sum_{k=1}^{K} d_{j,k}^2 }$"                                            ,
 
-  "Root mean squared error"                                                                                           ,
-  "Square root of the mean squared differences."                                                                      ,
-  "$\\sqrt{ \\frac{1}{K^2} \\sum_{j=1}^{K}\\sum_{k=1}^{K} d_{j,k}^2 }$"                                               ,
+  "Correlation dissimilarity"                                                                                      ,
+  "One minus the correlation between vectorized matrices."                                                         ,
+  "$1 - \\text{corr}(\\text{vec}(\\mathbf{P}), \\text{vec}(\\hat{\\mathbf{P}}))$"                                  ,
 
-  "Correlation dissimilarity"                                                                                         ,
-  "One minus the correlation between vectorized matrices."                                                            ,
-  "$1 - \\text{corr}(\\text{vec}(\\mathbf{P}), \\text{vec}(\\hat{\\mathbf{P}}))$"                                     ,
+  "Kullback-Leibler divergence"                                                                                    ,
+  "Information loss when $\\hat{\\mathbf{P}}$ approximates $\\mathbf{P}$."                                         ,
+  "$\\sum_{j=1}^{K}\\sum_{k=1}^{K} (p_{jk} + \\epsilon) \\, \\log\\!\\left(\\frac{p_{jk}}{\\hat{p}_{jk}}\\right)$" ,
 
-  "Kullback-Leibler divergence"                                                                                       ,
-  "Information loss when $\\hat{\\mathbf{P}}$ approximates $\\mathbf{P}$."                                            ,
-  "$\\sum_{j=1}^{K}\\sum_{k=1}^{K} (p_{j,k} + \\epsilon) \\, \\log\\!\\left(\\frac{p_{j,k}}{\\hat{p}_{j,k}}\\right)$" ,
+  "Akaike information criterion"                                                                                   ,
+  "Estimator of prediction error"                                                                                  ,
+  "$-2\\text{ln}(\\hat{\\ell}) + 2\\psi$"                                                                          ,
 
-  "Akaike information criterion"                                                                                      ,
-  "Estimator of prediction error"                                                                                     ,
-  "$2k - 2\\text{ln}(\\hat{\\ell})$"                                                                                  ,
-
-  "Bayesian information criterion"                                                                                    ,
-  ""                                                                                                                  ,
-  "$-2\\text{ln}(\\hat{\\ell}) + k\\text{ln}(n)$"
+  "Bayesian information criterion"                                                                                 ,
+  ""                                                                                                               ,
+  "$-2\\text{ln}(\\hat{\\ell}) + \\psi\\text{ln}(n)$"
 )
 
 notes <- if (knitr::pandoc_to() == "typst") {
-  "K represents the total number of categories; corr(x, y) = is the Pearson correlation function; vec(⋅) is an operator that converts a matrix into a vector by stacking its columns; 𝜃 is the number of model parameters; ℓ is the model’s log-likelihood; 𝑛 is the sample size. Additionally, for the Kullback–Leibler divergence, a small constant ε = 1e-10 is added to each matrix entry to avoid undefined logarithms when probabilities are zero."
+  "K represents the total number of categories; corr(*x, y*) = is the Pearson correlation function; vec(⋅) is an operator that converts a matrix into a vector by stacking its columns; ψ is the number of model parameters; ℓ is the model’s log-likelihood; 𝑛 is the sample size. Additionally, for the Kullback–Leibler divergence, a small constant ε = 1e-10 is added to each matrix entry to avoid undefined logarithms when probabilities are zero."
 } else {
-  "K represents the total number of categories; corr(x, y) = $\\frac{\\sum_i (x_i - \\bar{x})(y_i - \\bar{y})}{\\sqrt{\\sum_i(x_i - \\bar{x})^2(\\sum_i(y_i - \\bar{y})^2}}$ is the Pearson correlation function; vec(⋅) is an operator that converts a matrix into a vector by stacking its columns such that $\\text{vec} = (a, b, c, d)^\\intercal$; $\\theta$ is the number of model parameters; $\\ell$ is the model’s log-likelihood; $n$ is the sample size. Additionally, for the Kullback–Leibler divergence, a small constant $\\epsilon = 1e-10$ is added to each matrix entry to avoid undefined logarithms when probabilities are zero."
+  "K represents the total number of categories; corr(x, y) = $\\frac{\\sum_i (x_i - \\bar{x})(y_i - \\bar{y})}{\\sqrt{\\sum_i(x_i - \\bar{x})^2(\\sum_i(y_i - \\bar{y})^2}}$ is the Pearson correlation function; vec(⋅) is an operator that converts a matrix into a vector by stacking its columns such that $\\text{vec} = (a, b, c, d)^\\intercal$; $\\psi$ is the number of model parameters; $\\ell$ is the model’s log-likelihood; $n$ is the sample size. Additionally, for the Kullback–Leibler divergence, a small constant $\\epsilon = 1e-10$ is added to each matrix entry to avoid undefined logarithms when probabilities are zero."
 }
 
 # Outputting as table
@@ -235,7 +229,7 @@ We simulated data for $N = 10{,}000$ individuals across $t = 3$ waves. Consisten
 
 ### Covariate specification
 
-We generated a set of time-invariant and time-varying covariates designed to mimic plausible risk factors observed in ageing cohort studies [@sonnega2011]. Each covariate was chosen to reflect either a common demographic factor, a behavioural or psychological construct, or generic background variability that may influence cognitive transitions [@monaghan2026].
+We generated a set of time-invariant and time-varying covariates designed to mimic plausible risk factors observed in ageing cohort studies [@sonnega2011]. Each covariate was chosen to reflect either a common demographic factor or a behavioral / psychological construct that may influence cognitive transitions [@monaghan2026].
 
 - $\mathbf{x_1}$: A binary covariate drawn from a Bernoulli distribution with probability of success $0.5$. Within the simulation, this variable represents a binary demographic attribute such as gender.
 - $\mathbf{x_2}$: A continuous covariate drawn from a normal distribution $\mathcal{N}(70, 25)$ and then rounded to the nearest whole number. Within the simulation, this variable represents age.
@@ -252,57 +246,56 @@ x_{5i,t} &= \min \Big(1, \max \big(0, x_{5i,t-1} + \epsilon_{i,t}^{(5)} \big)\Bi
 \end{align*}
 $$
 
-where $t \in \{ 1, 2, 3\}$ indexes follow-up waves. The full covariate vector for individual $i$ at time $t$ was $\mathbf{z}_{i,t} = (x_{1i,t}, \; x_{2i,t}, \; x_{3i,t}, \; x_{4i,t}, \; x_{5i,t})$.
-
-\newpage
+where $t \in \{ 1, 2, 3\}$ indexes follow-up waves. The full covariate vector for individual $i$ at time $t$ was $\mathbf{x}_{i,t} = (x_{1i,t}, \; x_{2i,t}, \; x_{3i,t}, \; x_{4i,t}, \; x_{5i,t})$.
 
 ### Simulation scenarios
 
-We evaluated three data-generating mechanisms (DGMs) of increasing complexity. In all scenarios, transition probabilities were governed by a multinomial logistic model (@eq-multinomial-formula) with state 1 as the reference category. The corresponding transition probability for each non-reference category was calculated using @eq-non-reference-probability and for the reference category using @eq-reference-probability. Additionally, , all true value parameters vectors for scenarios S1, S2, and S3 $(\theta_{S1}, \theta_{S2}, \theta_{S3}, \text{respectively})$ were derived from prior empirical research investigating behavioral correlates of dementia transitions [@livingston2024a; @monaghan2026].
+We evaluated three data-generating mechanisms (DGMs) of increasing complexity. In all scenarios, transition probabilities were governed by a multinomial logistic model (supplementary equation A1) with state 1 as the reference category. The corresponding transition probability for each non-reference category was calculated using supplementary equation A2 and for the reference category using supplementary equation A3. Additionally, all true value parameters vectors for scenarios S1, S2, and S3 $(\pmb{\theta}_{S1}, \pmb{\theta}_{S2}, \pmb{\theta}_{S3}, \text{respectively})$ were derived from prior empirical research investigating behavioral correlates of dementia transitions [@monaghan2026].
 
 In scenario 1, transitions depended solely on a set of individual covariates $\mathbf{X}_{i,t} = (x_{1it}, x_{2it}, x_{3it})$, with no effect of the previous state. Within this scenario, the linear predictor was defined as:
 $$
-\eta^{(k)}_{i,t} = \alpha_{k} + \mathbf{X}_{it}^\intercal \beta_{k},
+\eta^{(k)}_{i,t} = \alpha_{k} + \mathbf{X}_{it}^\intercal \pmb{\beta}_{k},
 $$
 
 with true value parameters set as:
 $$
 \begin{align*}
-\theta_{S1} &= (\alpha_k, \; \beta_{1k}, \; \beta_{2k}, \; \beta_{3k}, \; : k = 2, 3) \\[4pt]
-\alpha &= (-5.152, -5.402) \\[4pt]
-\beta &= (0.008, -0.034, 0.036, 0.017, 0.028, 0.045).
+\pmb{\theta}_{S1} &= (\alpha_k, \; \beta_{1k}, \; \beta_{2k}, \; \beta_{3k}), \; k = 2, 3) \\[4pt]
+\pmb{\alpha} &= (-5.152, -5.402) \\[4pt]
+\pmb{\beta} &= (0.008, -0.034, 0.036, 0.017, 0.028, 0.045).
 \end{align*}
 $$
 
 In scenario 2, transitions depended additively on both the covariates $\mathbf{X}_{i,t} = (x_{1it}, x_{2it}, x_{3it})$ and the individual's previous state $Y_{it}$. Within this scenario, the linear predictor was defined as:
 $$
 \begin{align*}
-\eta^{(k)}_{i,t} &= \alpha_{k} + \mathbf{X}_{it}^\intercal \beta_{k} + \mathbf{S}_{it}^\intercal \gamma_k,
+\eta^{(k)}_{i,t} &= \alpha_{k} + \mathbf{X}_{it}^\intercal \pmb{\beta}_{k} + \mathbf{S}_{it}^\intercal \gamma_k,
 \end{align*}
 $$
 
 where $\mathbf{S}_{it}$ is an indicator variable. The true value parameters were set as:
 $$
 \begin{align*}
-\theta_{S2} &= (\alpha_k, \; \beta_{1k}, \; \beta_{2k}, \; \beta_{3k}, \gamma_{1k}, \; \gamma_{2k}, \; : k = 2, 3) \\[2pt]
-\alpha &= (-5.370, -7.907) \\[2pt]
-\beta &= (0.02, -0.011, 0.036, 0.039, 0.022, 0.016, 1.711, 2.790) \\[2pt]
-\gamma &= (-0.776, 20.914).
+\pmb{\theta}_{S2} &= (\alpha_k, \; \beta_{1k}, \; \beta_{2k}, \; \beta_{3k}, \gamma_{1k}, \; \gamma_{2k}), \; k = 2, 3 \\[2pt]
+\pmb{\alpha} &= (-5.370, -7.907) \\[2pt]
+\pmb{\beta} &= (0.02, -0.011, 0.036, 0.039, 0.022, 0.016, 1.711, 2.790) \\[2pt]
+\pmb{\gamma} &= (-0.776, 20.914).
 \end{align*}
 $$
 
 Finally, in scenario 3, transitions depended both on the covariates $\mathbf{X}_{i,t} = (x_{1it}, x_{2it}, x_{3it})$ and the individual's previous state $Y_{it}$ along with their corresponding interactions. Within this scenario, the linear predictor was defined as:
 $$
-\eta^{(k)}_{i,t} = \alpha_{k} + \mathbf{X}_{it}^\intercal \beta_{k} + \mathbf{S}_{it}^\intercal \gamma_k + (\mathbf{X}_{it} \otimes \mathbf{S}_{it})^\intercal \delta_{k},
+\eta^{(k)}_{i,t} = \alpha_{k} + \mathbf{X}_{it}^\intercal \pmb{\beta}_{k} + \mathbf{S}_{it}^\intercal \pmb{\gamma}_k + (\mathbf{X}_{it} \otimes \mathbf{S}_{it})^\intercal \pmb{\delta}_{k},
 $$
+
 with true value parameters defined as:
 $$
 \begin{align*}
-\theta_{S3} &= (\alpha_k, \; \beta_{1k}, \; \beta_{2k}, \; \beta_{3k}, \gamma_{1k}, \; \gamma_{2k}, \; \delta_{1k}, \; \delta_{2k},\; \delta_{3k},\; \delta_{4k}, \; \; \delta_{5k},\; \delta_{6k},: k = 2, 3) \\[2pt]
-\alpha &= (-5.885, -10.613) \\[2pt]
-\beta &= (0.102, 0.615, 0.043, 0.076, 0.019, -0.002) \\[2pt]
-\gamma &= (3.845, 7.901, -0.638, 12.753) \\[2pt]
-\delta &= (-0.292, -1.019, -0.474, -1.268, -0.031, -0.072, 0.093, 0.1, 0.008, 0.029, -0.082, -0.021).
+\pmb{\theta}_{S3} &= (\alpha_k, \; \beta_{1k}, \; \beta_{2k}, \; \beta_{3k}, \gamma_{1k}, \; \gamma_{2k}, \; \delta_{1k}, \; \delta_{2k},\; \delta_{3k},\; \delta_{4k}, \; \; \delta_{5k},\; \delta_{6k},: k = 2, 3) \\[2pt]
+\pmb{\alpha} &= (-5.885, -10.613) \\[2pt]
+\pmb{\beta} &= (0.102, 0.615, 0.043, 0.076, 0.019, -0.002) \\[2pt]
+\pmb{\gamma} &= (3.845, 7.901, -0.638, 12.753) \\[2pt]
+\pmb{\delta} &= (-0.292, -1.019, -0.474, -1.268, -0.031, -0.072, 0.093, 0.1, 0.008, 0.029, -0.082, -0.021).
 \end{align*}
 $$
 
@@ -313,10 +306,10 @@ $$
 
 # True simulation values -------------------------------------------------------
 scenario_1 <- tibble::tibble(
-  scenario  = "Scenario 1",
+  scenario = "Scenario 1",
   parameter = c("$\\alpha$", "$\\beta_{1}$", "$\\beta_{2}$", "$\\beta_{3}$"),
-  state_2   = c(-5.152, 0.008, 0.036, 0.028),
-  state_3   = c(-5.402, -0.034, 0.017, 0.045)
+  state_2 = c(-5.152, 0.008, 0.036, 0.028),
+  state_3 = c(-5.402, -0.034, 0.017, 0.045)
 )
 
 scenario_2 <- tibble::tibble(
@@ -350,11 +343,33 @@ scenario_3 <- tibble::tibble(
     "$\\gamma_{6}$"
   ),
   state_2 = c(
-    -5.885, 0.102, 0.043, 0.019, 3.845, -0.638,
-    -0.292, -0.474, -0.031, 0.093, 0.008, -0.082),
+    -5.885,
+    0.102,
+    0.043,
+    0.019,
+    3.845,
+    -0.638,
+    -0.292,
+    -0.474,
+    -0.031,
+    0.093,
+    0.008,
+    -0.082
+  ),
   state_3 = c(
-    -10.613, 0.615, 0.076, -0.002, 7.901,
-    12.753, -1.019, -1.268, -0.072, 0.100, 0.029, -0.021)
+    -10.613,
+    0.615,
+    0.076,
+    -0.002,
+    7.901,
+    12.753,
+    -1.019,
+    -1.268,
+    -0.072,
+    0.100,
+    0.029,
+    -0.021
+  )
 )
 
 # Combine into one tibble
@@ -376,7 +391,7 @@ coef_table |>
 
 ### Model fitting
 
-For each simulated dataset, we first partitioned the data into training $(80\%)$ and test $(20\%)$ sets. Model parameters were estimated exclusively on the training data, while all performance evaluations were conducted on held-out test data. For each training set, we fitted 15 multinomial logistic regression models using the *nnet* package [@venables2022] across 4 different sample sizes $\{100, 250, 1000, 5000\}$. These models were grouped into three "families", corresponding to the level of model misspecification relative to the true DGM.
+For each simulated dataset, we first partitioned the data into training $(80\%)$ and test $(20\%)$ sets. Model parameters were estimated exclusively on the training data, while all performance evaluations were conducted on held-out test data. This was done so as to assess the out-of-sample recovery of transition dynamics. For each training set, we fitted 15 multinomial logistic regression models using the *nnet* package [@venables2022] across 4 different sample sizes $\{100, 250, 1000, 5000\}$. These models were grouped into three "families", corresponding to the level of model misspecification relative to the true DGM.
 
 1. Base Models (Ignoring Markov Property)
 
@@ -414,6 +429,8 @@ $$
 \end{align*}
 $$ {#eq-mult-models}
 
+\newpage
+
 ### Model-based transition probabilities
 
 To evaluate how well each fitted model $\mathcal{M}$ captured the underlying transition dynamics, we generated model-based transition probability matrices via a two step procedure. In the first step, an augmented version of the test dataset was created enabled the model to predict transitions from all possible previous states. For each individual $i$ at each time point $t$, three augmented rows were created corresponding to the three possible previous states $j \in \{1,2,3\}$. This ensured that the fitted model could generate predicted probabilities
@@ -423,11 +440,13 @@ $$
 
 for every $j$, regardless of the individual’s actual previous state in the data.
 
-In the second step, we derived the transition behaviour implied by each model by predicting next-state transitions using the model’s estimated parameters. For each model $\mathcal{M}$, the estimated coefficients $\hat{\theta}^{\mathcal{M}}$ were used to compute predicted probabilities for all possible state transitions $(j \rightarrow k)$.
+In the second step, we derived the transition behaviour implied by each model by predicting next-state transitions using the model’s estimated parameters. For each model $\mathcal{M}$, the estimated coefficients vector $\pmb{\hat{\theta}}^{\mathcal{M}}$ were used to compute predicted probabilities for all possible state transitions $(j \rightarrow k)$.
 
 ## Performance Measures
 
-The core of our evaluation involved comparing the empirical transition matrix from the test dataset to the model-implied transition matrix. Let $\mathbf{P}_{i,t}$ be the empirical transition matrix for individual $i$ at time $t$ estimated by tabulating state transitions $(Y_{i,t}, Y_{i, t+1})$ from the test dataset. Additionally, let $\hat{\mathbf{P}}_{i,t}$ be the model-implied transition matrix. For individual $i$ at time $t$ with a covariate pattern $\mathbf{z}_{i,t}$ this is a $K \times K$ matrix where the entry $j, k$ is the model's predicted probability $P(Y_{t+1} = k \; \vert \; Y_t = j, \mathbf{z}_{i,t})$. We defined the difference matrix as $\mathbf{D}_{i,t} = \mathbf{P}_{i,t} - \hat{\mathbf{P}}_{i,t}$ and quantify the discrepancy using the distance metrics defined in @tbl-metrics.
+The core of our evaluation involved comparing the empirical transition matrix from the test dataset to the model-implied transition matrix. Let $\mathbf{P}_{i,t}$ be the empirical transition matrix for individual $i$ at time $t$ obtained by tabulating state transitions $(Y_{i,t}, Y_{i, t+1})$ from the test dataset. Additionally, let $\hat{\mathbf{P}}_{i,t}$ be the model-implied transition matrix. For individual $i$ at time $t$ with a covariates pattern $\mathbf{z}_{i,t}$ this is a $K \times K$ matrix where the entry $j, k$ is the model's predicted probability $P(Y_{t+1} = k \; \vert \; Y_t = j, \mathbf{z}_{i,t})$. We defined the difference matrix as $\mathbf{D}_{i,t} = \mathbf{P}_{i,t} - \hat{\mathbf{P}}_{i,t}$ and quantify the discrepancy using the distance metrics defined in @tbl-metrics.
+
+\newpage
 
 # Results
 
@@ -440,27 +459,29 @@ Initially we present an exploratory analysis of the data from each scenario usin
 
 # Transition
 transitions <- tribble(
-  ~"Previous state (t-1)" , ~"Scenario"  , ~"1"               , ~"2"             , ~"3"             , ~"Total"   ,
-  "1"                     , "Scenario 1" , "12856<br>(0.64)" , "2456<br>(0.12)" , "847<br>(0.04)"  , "16159"    ,
-  "2"                     , "Scenario 1" , "2155<br>(0.11)"   , "498<br>(0.02)"  , "204<br>(0.01)"  , "2857"     ,
-  "3"                     , "Scenario 1" , "750<br>(0.04)"    , "167<br>(0.01)"  , "67<br>(0.003)"  , "984"      ,
-  "1"                     , "Scenario 1" , "13817<br>(0.69)"  , "1996<br>(0.10)" , "192<br>(0.01)"  , "16005"    ,
-  "2"                     , "Scenario 1" , "1657<br>(0.08)"   , "2606<br>(0.04)" , "162<br>(0.01)"  , "2606"     ,
-  "3"                     , "Scenario 1" , "120<br>(0.01)"    , "55<br>(0.003)"  , "1214<br>(0.06)" , "1389"     ,
-  "1"                     , "Scenario 1" , "14030<br>(0.70)"  , "1921<br>(0.10)" , "166<br>(0.01)"  , "16117"    ,
-  "2"                     , "Scenario 1" , "1602<br>(0.08)"   , "712<br>(0.04)"  , "167<br>(0.01)"  , "2481"     ,
-  "3"                     , "Scenario 1" , "102<br>(0.01)"    , "61<br>(0.003)"   , "1239<br>(0.06)" , "1402"
+  ~"Previous state (t-1)" , ~"Scenario"  , ~"1"              , ~"2"             , ~"3"             , ~"Total" ,
+  "1"                     , "Scenario 1" , "12856<br>(0.64)" , "2456<br>(0.12)" , "847<br>(0.04)"  , "16159"  ,
+  "2"                     , "Scenario 1" , "2155<br>(0.11)"  , "498<br>(0.02)"  , "204<br>(0.01)"  , "2857"   ,
+  "3"                     , "Scenario 1" , "750<br>(0.04)"   , "167<br>(0.01)"  , "67<br>(0.003)"  , "984"    ,
+  "1"                     , "Scenario 1" , "13817<br>(0.69)" , "1996<br>(0.10)" , "192<br>(0.01)"  , "16005"  ,
+  "2"                     , "Scenario 1" , "1657<br>(0.08)"  , "2606<br>(0.04)" , "162<br>(0.01)"  , "2606"   ,
+  "3"                     , "Scenario 1" , "120<br>(0.01)"   , "55<br>(0.003)"  , "1214<br>(0.06)" , "1389"   ,
+  "1"                     , "Scenario 1" , "14030<br>(0.70)" , "1921<br>(0.10)" , "166<br>(0.01)"  , "16117"  ,
+  "2"                     , "Scenario 1" , "1602<br>(0.08)"  , "712<br>(0.04)"  , "167<br>(0.01)"  , "2481"   ,
+  "3"                     , "Scenario 1" , "102<br>(0.01)"   , "61<br>(0.003)"  , "1239<br>(0.06)" , "1402"
 )
 
 # Table
 transitions |>
   dplyr::select(-Scenario) |>
   tt() |>
-  group_tt(i = list(
-    "Base simulation" = 1,
-    "Additive simulation" = 4,
-    "Multiplicative simulation" = 7
-  )) |>
+  group_tt(
+    i = list(
+      "Base simulation" = 1,
+      "Additive simulation" = 4,
+      "Multiplicative simulation" = 7
+    )
+  ) |>
   style_tt(i = c(1, 5, 9), bold = TRUE, align = "l") |>
   style_tt(j = 1, align = "l") |>
   style_tt(j = c(2:4), align = "c") |>
@@ -523,9 +544,9 @@ fig_1 |>
   ) +
   scale_y_continuous(labels = scales::percent_format()) +
   labs(
-    x = "Model Type",
+    x = "Model family",
     y = "Proportion of repetitions identified as best",
-    fill = "Sub Model"
+    fill = "Sub model"
   ) +
   facet_grid(
     size_label ~ metric,
@@ -541,9 +562,9 @@ fig_1 |>
 
 We illustrate the proposed goodness-of-fit assessment framework using data from the United States Health and Retirement Study (HRS; @sonnega2011). The HRS is a nationally representative longitudinal panel study administered by the Institute for Social Research at the University of Michigan, which follows American adults aged 50 years and older. Since its inception in 1992, the HRS has collected biennial data on participants’ health, socioeconomic circumstances, and cognitive functioning, making it a widely used resource for studying cognitive ageing and dementia trajectories. For the purpose of this illustration, we focus on three of these biennial waves from 2018 - 2022, yielding a sample of $n = 10{,}895$ respondents.
 
-Cognitive function in the HRS is measured using a battery of assessments adapted from the Telephone Interview for Cognitive Status (TICS; @fong2009). These assessments include immediate and delayed noun free-recall tasks to evaluate episodic memory, a serial sevens subtraction task to assess working memory, and a backward counting task to capture mental processing speed. Based on these assessments, @crimmins2011 developed a validated 27-point cognitive scale along with established cut-off points to classify respondents’ cognitive status. Following this classification scheme, respondents scoring between 12 and 27 were classified as having normal cognition, scores between 7 and 11 indicated mild cognitive impairment (MCI), and scores between 0 and 6 were classified as dementia.
+Cognitive function in the HRS is measured using a battery of assessments adapted from the Telephone Interview for Cognitive Status (TICS; @fong2009), which is based on the Mini-mental State Examination [@folstein1975]. These assessments include immediate and delayed noun free-recall tasks to evaluate episodic memory, a serial sevens subtraction task to assess working memory, and a backward counting task to capture mental processing speed. Based on these assessments, @crimmins2011 developed a validated 27-point cognitive scale along with established cut-off points to classify respondents’ cognitive status. Following this classification scheme, respondents scoring between 12 and 27 were classified as having normal cognition, scores between 7 and 11 indicated mild cognitive impairment (MCI), and scores between 0 and 6 were classified as dementia.
 
-From the available HRS covariates, we selected three predictors that are commonly examined in studies of cognitive decline [@livingston2024a]: sex ($x1$), age ($x2$), and a self memory rating ($x3$). To mirror the design of the simulation study and to assess the ability of the proposed distance metrics to distinguish informative predictors from noise, we additionally simulated two non-informative covariates from a Uniform distribution, such that $\{x4; x5\} \sim \mathcal{U}(0, 1)$.
+From the available HRS covariates, we selected three predictors that are commonly examined in studies of cognitive decline [@livingston2024a]: sex ($x_1$), age ($x_2$), and a five-point ordinal self-rating of memory ($x_3$). To mirror the design of the simulation study and to assess the ability of the proposed distance metrics to distinguish informative predictors from noise, we additionally simulated two non-informative covariates from a Uniform distribution, such that $\{x_4; x_5\} \sim \mathcal{U}(0, 1)$. In addition, we included the respondent's cognitive status $Y_t$ when necessary (i.e., @eq-add-models and @eq-mult-models).
 
 Using this covariate set, we followed the same model-fitting and evaluation procedure as in the simulation study. Specifically, the data were split into training (80%) and test (20%) sets, the 15 multinomial logistic regression models defined in @eq-base-models, @eq-add-models, and @eq-mult-models were fitted, and observed transition probabilities $\mathbf{P}_{i,t}$ were compared to predicted probabilities $\hat{\mathbf{P}}_{i,t}$. @fig-case-study summarises the relative performance of each model across the different goodness-of-fit measures.
 
@@ -551,7 +572,7 @@ Consistent with the simulation results (see @fig-replications), both the Manhatt
 
 ```{r}
 #| label: fig-case-study
-#| fig-cap: "Proportion of case study repetitions in which each candidate model was ranked as best fitting across distance metrics and information criteria. Each stacked bar corresponds to a model class, with segment heights representing the percentage of repetitions in which each sub-model was selected as the best fitting. AIC = Akaike information criterion; BIC = Bayesian information criterion."
+#| fig-cap: "Proportion of case study repetitions in which each candidate model was ranked as best fitting across distance metrics and information criteria. Each stacked bar corresponds to a model class, with segment heights representing the percentage of repetitions in which each sub-model was selected as the best fitting. Base models ignore first-order state dependence, whereas additive and multiplicative specifications incorporate Yt directly (with or without interactions), thereby modelling the Markov transition structure explicitly. AIC = Akaike information criterion; BIC = Bayesian information criterion."
 #| fig-width: 15
 #| fig-height: 10
 #| include: true
@@ -591,9 +612,9 @@ fig_2 |>
   ) +
   scale_y_continuous(labels = scales::percent_format()) +
   labs(
-    x = "Model Type",
+    x = "Model family",
     y = "Proportion of repetitions identified as best",
-    fill = "Sub Model"
+    fill = "Sub model"
   ) +
   facet_grid(
     size_label ~ metric,
@@ -605,7 +626,7 @@ fig_2 |>
 
 # Discussion
 
-This study evaluated a set of matrix-based distance metrics as tools for assessing goodness-of-fit in discrete-time Markov models estimated via multinomial logistic regression, with particular emphasis on applications to dementia progression modelling. Through a combination of simulation experiments and an empirical case study using HRS data, we demonstrate that distance-based comparisons of observed and model-implied transition matrices provide information that is complementary to, and in some settings more reliable than, traditional likelihood-based information criteria.
+This study evaluated a set of matrix-based distance metrics as tools for assessing goodness-of-fit in discrete-time Markov models estimated via multinomial logistic regression, with particular emphasis on applications to dementia progression modelling. Through a combination of simulation experiments and an empirical case study using HRS data, we demonstrate that distance-based comparisons of observed and model-implied transition matrices provide information that is complementary to, and in some settings (e.g., $n \in \{100, 250\}$) more reliable than, traditional likelihood-based information criteria.
 
 Across the simulation study, two distance metrics consistently exhibited strong performance: the Manhattan distance and the Kullback–Leibler divergence. Both exhibited strong and comparatively stable performance across a range of sample sizes and data-generating mechanisms, particularly under increased model complexity. Most notably, the Manhattan distance frequently outperformed AIC and BIC in small samples and in settings involving interaction effects or strong state dependence. This finding suggests that the Manhattan distance is comparatively robust to the sampling variability that can destabilise likelihood-based criteria in finite samples [@emiliano2014].
 
@@ -613,21 +634,26 @@ The KL divergence displayed a complementary pattern. While less robust than the 
 
 As expected, the performance of traditional information criteria improved substantially with increasing sample size. In large samples, both AIC and BIC demonstrated near-perfect recovery of the true data-generating model, consistent with their well-established asymptotic properties. These results confirm that likelihood-based approaches remain appropriate and effective when data are abundant and model complexity is well supported.
 
-However, the more gradual convergence of the distance-based metrics highlights an important conceptual distinction. Distance metrics do not aim to optimise predictive likelihood; instead, they assess how well a fitted model reproduces the empirical transition structure itself. Their continued sensitivity to structural discrepancies—even in larger samples—should therefore be viewed as a strength rather than a limitation. In applied settings, particularly in disease progression modelling, a model that fits well in likelihood terms may still produce implausible or distorted transition dynamics, a form of misspecification that distance-based diagnostics are well positioned to detect.
+However, the more gradual convergence of the distance-based metrics highlights an important conceptual distinction. Distance metrics do not aim to optimise predictive likelihood. Instead, they assess how well a fitted model reproduces the empirical transition structure itself. Their continued sensitivity to structural discrepancies, even in larger samples, should therefore be viewed as a strength rather than a limitation. In applied settings, particularly in disease progression modelling, a model that fits well in likelihood terms may still produce implausible or distorted transition dynamics, a form of misspecification that distance-based diagnostics are well positioned to detect.
 
 The empirical case study using HRS data further corroborated the simulation findings. Both the Manhattan distance and KL divergence tended to favour models containing substantively meaningful predictors of cognitive decline (sex, age, and self-rated memory), while remaining comparatively insensitive to the inclusion of simulated non-informative covariates. This behaviour is consistent with the intended role of the distance metrics: to distinguish meaningful signal in transition dynamics from noise introduced by irrelevant predictors.
 
-Taken together, these findings suggest that matrix-based distance metrics—particularly the Manhattan distance and KL divergence—provide a valuable addition to the model evaluation toolkit for discrete-time Markov models. Rather than serving as replacements for AIC or BIC, these measures are best viewed as complementary diagnostics that foreground structural fidelity of transition dynamics. Their use is especially well suited to applied research contexts, such as dementia progression modelling, where the realism and interpretability of implied transitions are at least as important as predictive likelihood.
+Taken together, these findings suggest that matrix-based distance metrics, in particularl the Manhattan distance and KL divergence, provide a valuable addition to the model evaluation toolkit for discrete-time Markov models. Rather than serving as replacements for AIC or BIC, these measures are best viewed as complementary diagnostics that foreground structural fidelity of transition dynamics. Their use is especially well suited to applied research contexts, such as dementia progression modelling, where the realism and interpretability of implied transitions are at least as important as predictive likelihood.
 
 ## Limitations and future directions
 
-Several limitations of the present study suggest directions for future research. First, although the proposed goodness-of-fit framework captures discrepancies in transition structure that are not reflected in likelihood-based criteria, the choice of distance metric remains application-dependent. Different metrics emphasize different aspects of the transition matrix (e.g., global versus state-specific discrepancies), and no single metric can be considered universally optimal. Future work could explore principled strategies for selecting or combining distance measures, potentially informed by substantive theory or decision-analytic considerations. Secondly, this simulation framework focuses on discrete-time, first-order Markov models. Extensions to higher-order Markov processes (e.g., continuous-time models, or hidden Markov models) represent promising avenues for future research (see @zeng2010 as example).
+Several limitations of the present study suggest directions for future research. First, although the proposed goodness-of-fit framework captures discrepancies in transition structure that are not reflected in likelihood-based criteria, the choice of distance metric remains context dependent. Different distance metrics emphasize different aspects of the transition matrix (e.g., global versus state-specific discrepancies, absolute versus distributional differences), and no single metric can be considered universally optimal. Future work could explore principled strategies for selecting or combining distance measures, potentially informed by substantive theory or decision-analytic considerations [@lee2025a; @wu2021]
+
+Secondly, this simulation framework is restricted to discrete-time, first-order Markov processes estimated using generalized logit models. While this specification covers a broad and widely used class of state transition models, it does not encompass more complex forms of dependence.
+
+Several extensions therefore represent promising avenues for future work. These include higher-order Markov processes, (i.e., where transitions depend on multiple previous states) and continuous-time formulations. In addition, hidden Markov models, which incorporate latent state dynamics, would provide a natural extension for settings with measurement error or unobserved heterogeneity [@zeng2010]. Beyond the generalized logit framework used here, other important classes of categorical outcome models, such as ordinal transition models and alternative link specifications, could also be investigated to assess whether the proposed goodness-of-fit framework performs similarly across modelling paradigms.
 
 ## Conclusions
 
 Matrix-based distance metrics offer a principled and interpretable complement to likelihood-based criteria for assessing discrete-time Markov models. By directly comparing empirical transition matrices to those implied by fitted models, these measures provide diagnostic information that is particularly sensitive to structural misspecification. The strong finite-sample performance of the Manhattan distance and the favourable asymptotic behaviour of the Kullback–Leibler divergence highlight their practical utility, especially in applied longitudinal settings where accurate representation of transition dynamics is central to substantive inference.
 
-::: {.content-visible when-format="html"}
+\newpage
 
+::: {.content-visible when-format="html"}
 # References
 :::

@@ -4,6 +4,7 @@ project:
 
   render:
     - "manuscript.qmd"
+    - "appendix.qmd"
 
 language:
   title-block-published: Latest version
@@ -43,8 +44,8 @@ format:
         dev: "ragg_png"
         dpi: 300
 
-  # Typst
+# Typst
   shifu-typst:
     block-author: false
     include-in-header:
-      - text: '#import "@preview/mitex:0.2.4": *'
+      - text: '#import "@preview/mitex:0.2.6": *'

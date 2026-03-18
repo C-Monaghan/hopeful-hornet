@@ -1,0 +1,74 @@
+---
+title: "Discrete time Markov models of cognitive transitions: Assessing goodness of fit"
+date: "2026-03-09"
+author:
+  - name: Cormac Monaghan
+    url: https://c-monaghan.github.io/
+    email: cormacmonaghan@protonmail.com
+    orcid: 0000-0001-9012-3060
+    affiliation:
+      - id: 1
+        name: Maynooth University
+    attributes:
+      corresponding: true
+  - name: Idemauro Antonio Rodrigues de Lara
+    orcid: 0000-0002-1172-9855
+    affiliation:
+      - id: 2
+        name: University of São Paulo
+  - name: Rafael de Andrade Moral
+    url: https://rafamoral.github.io/
+    orcid: 0000-0002-0875-3563
+    affiliation:
+      - id: 1
+        name: Maynooth University
+  - name: Joanna McHugh Power
+    orcid: 0000-0002-7387-3107
+    affiliation:
+      id: 1
+      name: Maynooth University
+bibliography: references.bib
+csl: files/apa.csl
+---
+
+# Supplementary materials {.hide}
+
+## Multinomial Representation of Discrete-Time Markov Models
+
+In discrete-time settings, transition probabilities between states can be
+estimated using a multinomial logistic regression framework. Let $Y_{i,t}$
+denote the state occupied by individual $i$ at time $t$, where
+$Y_{i,t} \in \{1, 2, \dots, K\}$. The probability of transitioning from state
+$j$ at time $t$ to state $k$ at time $t + 1$ can be expressed as:
+
+$$
+p_{jk}(t, t+1) = P(Y_{i, t+1} = k \; \vert \; Y_{i, t} = j).
+$$
+
+When covariates $\mathbf{z}_{i,t}$ are included these probabilities can be
+modelled using a multinomial logistic regression formulation. For non-reference
+categories $k = 2, \dots, K$, the linear predictor is
+
+$$
+\eta_{i,t}^{(k)} = log(\frac{p_{jk} (\mathbf{z_{i,t}})}{p_{j1} (\mathbf{z_{i,t}})}) = \alpha_{jk} + \mathbf{z}^\intercal_{i,t} \pmb{\beta}_{jk} \qquad \text{for } K = 2, \dots, K.
+$${#eq-1}
+
+Within the formulation, $p_{j1}$ is the reference probability (e.g., remaining
+in state $j$), $\alpha_{jk}$ is a state-pair specific intercept, and
+$\beta_{jk}$ is a vector of coefficients for covariates $\mathbf{z}_{i,t}$ (of
+which $Y_{i,t}$ is inclusive).
+
+The resulting transition probabilities are obtained from the multinomial link
+function such that the transition probabilities from state $j$ are given by:
+
+$$
+p_{jk}(\mathbf{z}_{i,t}) = \frac{\exp(\eta^{(k)}_{i,t})}{1 + \sum_{k = 2}^{K} \exp(\eta^{(k)}_{i,t})}, \qquad \text{for } k = 2, \dots, K
+$${#eq-2}
+
+and for the reference category,
+
+$$
+p_{j1}(\mathbf{z}_{i,t}) = \frac{1}{1 - \sum^{K}_{k=2}\exp(\eta^{(k)}_{i,t})}.
+$${#eq-3}
+
+This formulation provides a convenient way to estimate covariate-dependent transition probabilities in discrete-time Markov models using standard multinomial regression software.

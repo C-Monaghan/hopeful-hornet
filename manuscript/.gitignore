@@ -1,2 +1,6 @@
+manuscript_files/
+files/
+output/
+
 /.quarto/
 **/*.quarto_ipynb
