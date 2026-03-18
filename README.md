@@ -2,7 +2,7 @@
 
 <!-- README.md is generated from README.qmd. Please edit that file -->
 
-## Goodness of fit diagnostics for discrete time Markov models of cognitive transitions
+## Discrete time Markov models of cognitive transitions: Assessing goodness of fit
 
 - [Cormac Monaghan](https://c-monaghan.github.io/) • Maynooth University
 - [Idemauro Antonio Rodrigues de
@@ -17,11 +17,39 @@
 ------------------------------------------------------------------------
 
 > Monaghan, C., de Lara, IAR, de Andrade Moral, R, & McHugh Power, J.
-> Goodness of fit diagnostics for Markov models.
+> Discrete time Markov models of cognitive transitions: Assessing
+> goodness of fit.
 
 ------------------------------------------------------------------------
 
 ## Abstract
+
+Dementia progression is often described as movement between discrete
+cognitive states, such as normal cognition, mild cognitive impairment,
+and dementia. Markov models are widely used to analyze such transitions
+and to estimate the probability of moving between cognitive states over
+time. However, assessing how well these models capture the underlying
+transition dynamics is challenging. Conventional likelihood-based
+criteria evaluate overall model fit but may not adequately reflect
+whether a model accurately reproduces the observed transition structure.
+This study proposes and evaluates a transition-based goodness-of-fit
+framework for discrete-time Markov models. We conducted a simulation
+study across four sample sizes (100, 250, 1000, 5000). Differences
+between observed and model-based transition matrices were quantified
+using several matrix distance metrics and compared with likelihood-based
+criteria. The proposed approach was also illustrated in a case study
+examining transitions between cognitive states in dementia.
+Distance-based metrics distinguished models based on how well they
+reproduced the true transition structure. When models included state
+dependence or interaction effects, these metrics more often identified
+better-performing models. At smaller sample sizes, the Manhattan
+distance and Kullback–Leibler divergence selected models that best
+matched the true transition patterns more frequently than AIC or BIC.
+Similar patterns were observed in the case study. Evaluating how closely
+models reproduce observed state transitions can provide useful
+information beyond traditional likelihood-based criteria. Distance-based
+measures may therefore complement conventional approaches when assessing
+Markov models of dementia progression and other multi-state processes.
 
 ## 🙏🐝: Note on “hopeful hornet” project name
 
