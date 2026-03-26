@@ -1,4 +1,4 @@
-# Simulation Scenario 1 
+# Simulation Scenario 1
 # Assuming no previous response effect
 # ------------------------------------------------------------------------------
 
@@ -15,7 +15,7 @@ pacman::p_load(
 )
 
 # Scenario setup
-scenario <- case_when(
+scenario <- dplyr::case_when(
   stringr::str_detect(this.path(), "scenario_1") ~ 1,
   stringr::str_detect(this.path(), "scenario_2") ~ 2,
   stringr::str_detect(this.path(), "scenario_3") ~ 3
@@ -42,7 +42,7 @@ Rcpp::sourceCpp(file = here::here("R/compare_matrices.cpp"))
 
 # 4. Simulating "true" data ----------------------------------------------------
 sim <- simulate_data(
-  n_subjects = 10000, n_waves = 3, scenario = scenario, 
+  n_subjects = 10000, n_waves = 3, scenario = 3,
   resim = FALSE, betas = NULL, seed = 123, verbose = TRUE)
 
 # Adding previous states
@@ -50,8 +50,8 @@ data <- sim$data |> add_previous_status()
 
 # 5. Fit base, additive, multiplicative models ---------------------------------
 models <- fit_markov_model(
-  data         = data, 
-  sample_sizes = c(100, 250, 1000, 5000), 
+  data         = data,
+  sample_sizes = c(100, 250, 1000, 5000),
   n_reps       = 200,
   parallel     = TRUE,
   seed         = 125)
@@ -73,7 +73,7 @@ model_fits <- models[c("base_models", "additive_models", "multiplicative_models"
 saveRDS(model_fits, file.path(this.dir(), "results/cache/test/model_fits.RDS"))
 
 # 7. Extract PIDs into a single tibble -----------------------------------------
-# pids_df <- models |> 
+# pids_df <- models |>
 #   pluck("idv_trans") |>
 #   imap(function(by_reps, size_label) {
 #   imap(by_reps, function(by_pid_list, rep) {
@@ -108,22 +108,22 @@ predicted_probs <- model_fits |>
           # Get associated augmented data file & IDs
           pred_data <- augmented_data[[size]][[rep_index]]
           ids <- pred_data |> pull(ID) |> unique()
-          
+
           # Calculate predicted probabilities
           probs <- predict(betas, pred_data, type = "probs")
-          
+
           # Split into 3x3 matrices
           # Split into 3x3 matrices
           split_rows <- split(
             seq_len(nrow(probs)),
             ceiling(seq_along(seq_len(nrow(probs))) / 3)
           )
-          
+
           # Building names for matrices
           id_wave_names <- rep(ids, each = 2)
           wave_labels <- rep(c("1-2", "2-3"), times = length(ids))
           matrix_names <- paste0("ID_", id_wave_names, "_", wave_labels)
-          
+
           named_matrices <- setNames(
             lapply(split_rows, function(rows) {
               matrix(probs[rows, ], nrow = 3, ncol = 3, byrow = FALSE)
@@ -152,8 +152,8 @@ obs_tibble <- models |>
   flatten_obs_transitions() |>
   tibble::as_tibble() |>
   mutate(wave = case_when(
-    wave == "2-2" ~ "1-2", 
-    wave == "3-3" ~ "2-3", 
+    wave == "2-2" ~ "1-2",
+    wave == "3-3" ~ "2-3",
     TRUE ~ wave
   ))
 
@@ -184,7 +184,7 @@ results_list <- vector("list", length = num_tasks)
 for (i in seq_len(num_tasks)) {
   obs <- transition_tibble$obs_mat[[i]]
   sim <- transition_tibble$sim_mat[[i]]
-  
+
   # Using C++ code
   results_list[[i]] <- tryCatch(
     compare_matrices_rcpp(obs, sim),
@@ -193,7 +193,7 @@ for (i in seq_len(num_tasks)) {
       NULL
     }
   )
-  
+
   # Update progress bar
   setTxtProgressBar(pb, i)
 }
@@ -216,7 +216,7 @@ metadata <- transition_tibble |>
   dplyr::mutate(row_id = dplyr::row_number())
 
 # Join into one dataset
-matrix_distances <- metadata |> 
+matrix_distances <- metadata |>
   dplyr::left_join(results_dt, by = "row_id") |>
   dplyr::select(-row_id)
 
@@ -260,7 +260,7 @@ matrix_distances <- matrix_distances |>
 message("Saving results ... ")
 
 fst::write.fst(
-  x = matrix_distances, 
+  x = matrix_distances,
   path = file.path(this.dir(), "results/matrix_distances_test.fst"))
 
 # 8. Resimulate from each β‑list in parallel -----------------------------------
@@ -277,27 +277,27 @@ fst::write.fst(
 
 # 9. Saving resimulation components --------------------------------------------
 # message("Saving resimulation components ... ")
-# 
+#
 # plan(sequential)
-# 
+#
 # # Resimulation
 # # saveRDS(object = resimulation, file = file.path(this.dir(), "results/cache/resim.RDS"))
-# 
+#
 # # Observed transitions
 # saveRDS(
 #   object = models$idv_trans,
 #   file = file.path(this.dir(), "results/cache/test/obs_trans.RDS"))
-# 
+#
 # # Model fits
 # saveRDS(
 #   object = model_fits,
 #   file = file.path(this.dir(), "results/cache/test/models.RDS"))
-# 
+#
 # # PIDs (not sure I need this anymore)
 # saveRDS(
 #   object = pids_df,
 #   file = file.path(this.dir(), "results/cache/test/pids.RDS"))
-# 
+#
 # # Data used in sample
 # saveRDS(
 #   object = models$sample_data,
