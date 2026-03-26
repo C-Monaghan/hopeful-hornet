@@ -1,6 +1,6 @@
 ---
 title: "Discrete time Markov models of cognitive transitions: Assessing goodness of fit"
-date: "2026-03-18"
+date: 2026-03-26
 author:
   - name: Cormac Monaghan
     url: https://c-monaghan.github.io/
@@ -12,6 +12,7 @@ author:
     attributes:
       corresponding: true
   - name: Idemauro Antonio Rodrigues de Lara
+    url: https://scholar.google.com/citations?user=-f0hcJYAAAAJ&hl=pt-BR
     orcid: 0000-0002-1172-9855
     affiliation:
       - id: 2
@@ -23,6 +24,7 @@ author:
       - id: 1
         name: Maynooth University
   - name: Joanna McHugh Power
+    url: https://www.maynoothuniversity.ie/people/joanna-mchugh-power
     orcid: 0000-0002-7387-3107
     affiliation:
       id: 1
@@ -35,7 +37,8 @@ keywords:
   - Dementia risk
   - Simulation
   - Markov models
-published: "This manuscript is a preprint and is currently under review at ... "
+  - Transitions
+published: "This manuscript is a preprint and is currently under review at The Journals of Gerontology, Series B"
 code-repo: " All R code is publicly available at  <https://github.com/C-Monaghan/hopeful-hornet>"
 bibliography: references.bib
 csl: files/apa.csl
@@ -274,6 +277,7 @@ $$
 $$
 
 where $\mathbf{S}_{it}$ is an indicator variable. The true value parameters were set as:
+
 $$
 \begin{align*}
 \pmb{\theta}_{S2} &= (\alpha_k, \; \beta_{1k}, \; \beta_{2k}, \; \beta_{3k}, \gamma_{1k}, \; \gamma_{2k}), \; k = 2, 3 \\[2pt]
@@ -284,6 +288,7 @@ $$
 $$
 
 Finally, in scenario 3, transitions depended both on the covariates $\mathbf{X}_{i,t} = (x_{1it}, x_{2it}, x_{3it})$ and the individual's previous state $Y_{it}$ along with their corresponding interactions. Within this scenario, the linear predictor was defined as:
+
 $$
 \eta^{(k)}_{i,t} = \alpha_{k} + \mathbf{X}_{it}^\intercal \pmb{\beta}_{k} + \mathbf{S}_{it}^\intercal \pmb{\gamma}_k + (\mathbf{X}_{it} \otimes \mathbf{S}_{it})^\intercal \pmb{\delta}_{k},
 $$

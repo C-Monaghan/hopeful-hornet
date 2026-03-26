@@ -1,6 +1,6 @@
 ---
 title: "Discrete time Markov models of cognitive transitions: Assessing goodness of fit"
-date: "2026-03-09"
+date: 2026-03-26
 author:
   - name: Cormac Monaghan
     url: https://c-monaghan.github.io/
@@ -12,6 +12,7 @@ author:
     attributes:
       corresponding: true
   - name: Idemauro Antonio Rodrigues de Lara
+    url: https://scholar.google.com/citations?user=-f0hcJYAAAAJ&hl=pt-BR
     orcid: 0000-0002-1172-9855
     affiliation:
       - id: 2
@@ -23,6 +24,7 @@ author:
       - id: 1
         name: Maynooth University
   - name: Joanna McHugh Power
+    url: https://www.maynoothuniversity.ie/people/joanna-mchugh-power
     orcid: 0000-0002-7387-3107
     affiliation:
       id: 1
